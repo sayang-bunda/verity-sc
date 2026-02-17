@@ -9,11 +9,7 @@ import {SafeMarketStorage} from "../core/SafeMarketStorage.sol";
 abstract contract RiskEngine is SafeMarketStorage {
     uint8 public constant MANIPULATION_THRESHOLD = 70;
 
-    function _reportManipulation(
-        uint256 marketId,
-        uint8 score,
-        string calldata reason
-    ) internal {
+    function _reportManipulation(uint256 marketId, uint8 score, string calldata reason) internal {
         DataTypes.Market storage m = markets[marketId];
         if (m.status != uint8(DataTypes.MarketStatus.Active)) {
             revert Errors.MarketNotActive();
