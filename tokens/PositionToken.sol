@@ -6,20 +6,23 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract PositionToken is ERC1155, Ownable {
     error Unauthorized();
+    error InvalidAddress();
+    error SafeMarketAlreadySet();
 
     address public safeMarket;
 
     event SafeMarketUpdated(address indexed newSafeMarket);
-
-    constructor() ERC1155("") Ownable(msg.sender) {}
 
     modifier onlySafeMarket() {
         if (msg.sender != safeMarket) revert Unauthorized();
         _;
     }
 
+    constructor() ERC1155("") Ownable(msg.sender) {}
+
     function setSafeMarket(address _safeMarket) external onlyOwner {
-        if (_safeMarket == address(0)) revert Unauthorized();
+        if (_safeMarket == address(0)) revert InvalidAddress();
+        if (safeMarket != address(0)) revert SafeMarketAlreadySet();
         safeMarket = _safeMarket;
         emit SafeMarketUpdated(_safeMarket);
     }
