@@ -15,8 +15,9 @@ abstract contract RiskEngine is SafeMarketStorage {
         string calldata reason
     ) internal {
         DataTypes.Market storage m = markets[marketId];
-        if (m.status != uint8(DataTypes.MarketStatus.Active))
+        if (m.status != uint8(DataTypes.MarketStatus.Active)) {
             revert Errors.MarketNotActive();
+        }
 
         m.manipulationScore = score;
 
@@ -30,8 +31,9 @@ abstract contract RiskEngine is SafeMarketStorage {
 
     function _unpauseMarket(uint256 marketId) internal {
         DataTypes.Market storage m = markets[marketId];
-        if (m.status != uint8(DataTypes.MarketStatus.Paused))
+        if (m.status != uint8(DataTypes.MarketStatus.Paused)) {
             revert Errors.MarketNotActive();
+        }
 
         m.status = uint8(DataTypes.MarketStatus.Active);
         m.manipulationScore = 0;

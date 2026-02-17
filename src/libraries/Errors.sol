@@ -18,7 +18,7 @@ library Errors {
 
     error InsufficientLiquidity();
     error AlreadySeeded();
-    
+
     error InvalidOutcome();
     error EscalationFailed();
     error NothingToClaim();
@@ -27,7 +27,6 @@ library Errors {
     error InvalidFeeBps();
 
     error TransferFailed();
-    
+
     error InvalidSignature();
 }
-

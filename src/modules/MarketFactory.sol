@@ -31,14 +31,6 @@ abstract contract MarketFactory is SafeMarketStorage {
         m.outcome = uint8(DataTypes.MarketOutcome.Unresolved);
         m.category = category;
 
-        emit Events.MarketCreated(
-            marketId,
-            creator,
-            question,
-            resolutionCriteria,
-            dataSources,
-            deadline,
-            feeBps
-        );
+        emit Events.MarketCreated(marketId, creator, question, resolutionCriteria, dataSources, deadline, feeBps);
     }
 }

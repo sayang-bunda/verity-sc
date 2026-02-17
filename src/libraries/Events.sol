@@ -20,29 +20,15 @@ library Events {
         uint256 shares
     );
 
-    event LiquiditySeeded(
-        uint256 indexed marketId,
-        uint256 amount
-    );
+    event LiquiditySeeded(uint256 indexed marketId, uint256 amount);
 
-    event LiquidityWithdrawn(
-        uint256 indexed marketId,
-        uint256 amount
-    );
+    event LiquidityWithdrawn(uint256 indexed marketId, uint256 amount);
 
-    event SettlementRequested(
-        uint256 indexed marketId
-    );
+    event SettlementRequested(uint256 indexed marketId);
 
-    event MarketResolved(
-        uint256 indexed marketId,
-        uint8 outcome
-    );
+    event MarketResolved(uint256 indexed marketId, uint8 outcome);
 
-    event MarketEscalated(
-        uint256 indexed marketId,
-        uint8 confidence
-    );
+    event MarketEscalated(uint256 indexed marketId, uint8 confidence);
 
     event ManipulationAlert(
         uint256 indexed marketId,
@@ -50,13 +36,9 @@ library Events {
         string reason
     );
 
-    event MarketPaused(
-        uint256 indexed marketId
-    );
+    event MarketPaused(uint256 indexed marketId);
 
-    event MarketUnpaused(
-        uint256 indexed marketId
-    );
+    event MarketUnpaused(uint256 indexed marketId);
 
     event PayoutClaimed(
         uint256 indexed marketId,
@@ -70,4 +52,3 @@ library Events {
         uint256 amount
     );
 }
-
