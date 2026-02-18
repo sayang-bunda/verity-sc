@@ -6,27 +6,38 @@ library Errors {
 
     error MarketNotActive();
     error MarketPaused();
+    error MarketNotPaused();
     error MarketAlreadyResolved();
     error MarketNotFound();
 
     error DeadlineNotReached();
     error DeadlineAlreadyPassed();
 
-    error InvalidBetAmount();
+    error AmountTooLow();
+    error AmountTooHigh();
     error SlippageExceeded();
-    error PoolTooLow();
+    error InvalidSlippage();
+    error InsufficientShares();
 
+    error PoolTooLow();
+    error PoolImbalanced();
+    error InvalidPool();
     error InsufficientLiquidity();
     error AlreadySeeded();
 
     error InvalidOutcome();
+    error InvalidConfidence();
+    error InvalidCategory();
+    error InvalidFeeBps();
+
     error EscalationFailed();
     error NothingToClaim();
     error AlreadyClaimed();
-
-    error InvalidFeeBps();
+    error NoPositionToRefund();
 
     error TransferFailed();
-
     error InvalidSignature();
+    error ZeroAddress();
+    error MarketNotResolved();
+    error MarketNotEscalated();
 }

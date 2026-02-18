@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {DataTypes} from "../libraries/DataTypes.sol";
 
-abstract contract SafeMarketStorage {
+abstract contract VerityStorage {
     address public usdc;
     address public positionToken;
 

@@ -33,4 +33,6 @@ library Events {
     event PayoutClaimed(uint256 indexed marketId, address indexed user, uint256 amount);
 
     event FeeWithdrawn(uint256 indexed marketId, address indexed creator, uint256 amount);
+
+    event RefundProcessed(uint256 indexed marketId, address indexed user, uint256 amount);
 }

@@ -28,10 +28,10 @@ library DataTypes {
         uint16 feeBps;
         uint8 status;
         uint8 outcome;
-        uint8 category;
-        uint8 manipulationScore;
         uint128 poolYes;
         uint128 poolNo;
+        uint8 category;
+        uint8 manipulationScore;
         uint256 totalVolume;
     }
 
