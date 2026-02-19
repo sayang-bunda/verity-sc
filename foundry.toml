@@ -1,6 +1,7 @@
 [profile.default]
-src = "."
-out = "out"
+src  = "src"
+out  = "out"
+test = "test"
 libs = ["lib"]
 
 remappings = [

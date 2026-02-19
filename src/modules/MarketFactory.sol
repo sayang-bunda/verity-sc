@@ -4,9 +4,9 @@ pragma solidity ^0.8.24;
 import {DataTypes} from "../libraries/DataTypes.sol";
 import {Errors} from "../libraries/Errors.sol";
 import {Events} from "../libraries/Events.sol";
-import {SafeMarketStorage} from "../core/SafeMarketStorage.sol";
+import {VerityStorage} from "../core/VerityStorage.sol";
 
-abstract contract MarketFactory is SafeMarketStorage {
+abstract contract MarketFactory is VerityStorage {
     uint16 public constant MAX_FEE_BPS = 1000;
 
     function _createMarket(
@@ -18,8 +18,11 @@ abstract contract MarketFactory is SafeMarketStorage {
         string calldata resolutionCriteria,
         string calldata dataSources
     ) internal returns (uint256 marketId) {
+        if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
         if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
+        if (category > uint8(type(DataTypes.MarketCategory).max))
+            revert Errors.InvalidCategory();
 
         marketId = marketCount++;
 
@@ -31,6 +34,15 @@ abstract contract MarketFactory is SafeMarketStorage {
         m.outcome = uint8(DataTypes.MarketOutcome.Unresolved);
         m.category = category;
 
-        emit Events.MarketCreated(marketId, creator, question, resolutionCriteria, dataSources, deadline, feeBps);
+        emit Events.MarketCreated(
+            marketId,
+            creator,
+            category,
+            deadline,
+            feeBps,
+            question,
+            resolutionCriteria,
+            dataSources
+        );
     }
 }

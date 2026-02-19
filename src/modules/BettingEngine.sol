@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
-import "../core/libraries/CPMMMath.sol";
+import {CPMMMath} from "../libraries/CPMMMath.sol";
 
-contract BettingEngine {
-    function calculateBet(
+abstract contract BettingEngine {
+    function _calculateBet(
         uint256 amount,
         uint256 poolYes,
         uint256 poolNo,
         uint16 feeBps,
         bool isYes
     )
-        public
+        internal
         pure
         returns (
             uint256 shares,
@@ -21,8 +21,6 @@ contract BettingEngine {
         )
     {
         CPMMMath.validateAmount(amount);
-        CPMMMath.validateFeeBps(feeBps);
-
         (shares, feeAmount, newPoolYes, newPoolNo) = CPMMMath.calcShares(
             amount,
             poolYes,
@@ -32,18 +30,18 @@ contract BettingEngine {
         );
     }
 
-    function getPrice(
+    function _getPrice(
         uint256 poolYes,
         uint256 poolNo,
         bool isYes
-    ) public pure returns (uint256 price) {
+    ) internal pure returns (uint256) {
         return CPMMMath.calcPrice(poolYes, poolNo, isYes);
     }
 
-    function getMinShares(
+    function _calcMinShares(
         uint256 expectedShares,
         uint16 slippageBps
-    ) public pure returns (uint256 minShares) {
+    ) internal pure returns (uint256) {
         return CPMMMath.calcMinShares(expectedShares, slippageBps);
     }
 }

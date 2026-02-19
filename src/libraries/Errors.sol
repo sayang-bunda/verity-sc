@@ -3,30 +3,36 @@ pragma solidity ^0.8.24;
 
 library Errors {
     error Unauthorized();
+    error ZeroAddress();
+    error InvalidAddress();
 
     error MarketNotActive();
     error MarketPaused();
     error MarketAlreadyResolved();
     error MarketNotFound();
+    error InvalidMarketId();
 
     error DeadlineNotReached();
     error DeadlineAlreadyPassed();
 
-    error InvalidBetAmount();
-    error SlippageExceeded();
-    error PoolTooLow();
+    error AmountTooLow();
+    error AmountTooHigh();
+    error InvalidFeeBps();
 
+    error PoolTooLow();
+    error PoolImbalanced();
     error InsufficientLiquidity();
     error AlreadySeeded();
 
+    error SlippageExceeded();
+
     error InvalidOutcome();
-    error EscalationFailed();
+    error InvalidConfidence();
     error NothingToClaim();
     error AlreadyClaimed();
+    error NoPositionToRefund();
 
-    error InvalidFeeBps();
-
+    error InvalidCategory();
     error TransferFailed();
-
-    error InvalidSignature();
+    error VerityContractAlreadySet();
 }

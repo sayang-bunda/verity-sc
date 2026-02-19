@@ -9,24 +9,27 @@ abstract contract AccessManager is AccessControl {
     bytes32 public constant CRE_ROLE = keccak256("CRE_ROLE");
 
     modifier onlyAdmin() {
-        _onlyAdmin();
+        _checkAdmin();
         _;
     }
 
     modifier onlyCre() {
-        _onlyCre();
+        _checkCre();
         _;
     }
 
-    function _onlyAdmin() internal view {
+    function _checkAdmin() internal view {
         if (!hasRole(ADMIN_ROLE, msg.sender)) revert Errors.Unauthorized();
     }
 
-    function _onlyCre() internal view {
+    function _checkCre() internal view {
         if (!hasRole(CRE_ROLE, msg.sender)) revert Errors.Unauthorized();
     }
 
     function _setupRoles(address admin, address cre) internal {
+        if (admin == address(0) || cre == address(0))
+            revert Errors.ZeroAddress();
+
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
         _grantRole(CRE_ROLE, cre);

@@ -8,13 +8,11 @@ library DataTypes {
         Resolved,
         Escalated
     }
-
     enum MarketOutcome {
         Unresolved,
         Yes,
         No
     }
-
     enum MarketCategory {
         CryptoPrice,
         Political,
@@ -40,11 +38,5 @@ library DataTypes {
         uint128 noShares;
         uint128 totalBetYes;
         uint128 totalBetNo;
-    }
-
-    struct Alert {
-        uint256 marketId;
-        uint8 score;
-        uint64 timestamp;
     }
 }

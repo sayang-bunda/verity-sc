@@ -1,37 +1,36 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Errors} from "../libraries/Errors.sol";
 
+/// @notice ERC-1155 position token. Token ID even = YES, odd = NO
 contract PositionToken is ERC1155, Ownable {
-    error Unauthorized();
-    error InvalidAddress();
-    error SafeMarketAlreadySet();
+    address public verityContract;
 
-    address public safeMarket;
+    event VerityContractSet(address indexed verity);
 
-    event SafeMarketUpdated(address indexed newSafeMarket);
-
-    modifier onlySafeMarket() {
-        if (msg.sender != safeMarket) revert Unauthorized();
+    modifier onlyVerity() {
+        if (msg.sender != verityContract) revert Errors.Unauthorized();
         _;
     }
 
     constructor() ERC1155("") Ownable(msg.sender) {}
 
-    function setSafeMarket(address _safeMarket) external onlyOwner {
-        if (_safeMarket == address(0)) revert InvalidAddress();
-        if (safeMarket != address(0)) revert SafeMarketAlreadySet();
-        safeMarket = _safeMarket;
-        emit SafeMarketUpdated(_safeMarket);
+    function setVerityContract(address _verity) external onlyOwner {
+        if (_verity == address(0)) revert Errors.InvalidAddress();
+        if (verityContract != address(0))
+            revert Errors.VerityContractAlreadySet();
+        verityContract = _verity;
+        emit VerityContractSet(_verity);
     }
 
     function mint(
         address to,
         uint256 tokenId,
         uint256 amount
-    ) external onlySafeMarket {
+    ) external onlyVerity {
         _mint(to, tokenId, amount, "");
     }
 
@@ -39,7 +38,7 @@ contract PositionToken is ERC1155, Ownable {
         address from,
         uint256 tokenId,
         uint256 amount
-    ) external onlySafeMarket {
+    ) external onlyVerity {
         _burn(from, tokenId, amount);
     }
 
