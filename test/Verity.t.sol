@@ -80,8 +80,8 @@ contract VerityTest is Test {
     // ============ TC-01 ~ TC-02: Deploy ============
 
     function test_TC01_DeploySuccess() public view {
-        assertEq(verity.usdc(), address(usdc));
-        assertEq(verity.positionToken(), address(posToken));
+        assertEq(verity.USDC(), address(usdc));
+        assertEq(verity.POSITION_TOKEN(), address(posToken));
         assertEq(verity.marketCount(), 0);
         assertTrue(verity.hasRole(verity.ADMIN_ROLE(), admin));
         assertTrue(verity.hasRole(verity.CRE_ROLE(), cre));

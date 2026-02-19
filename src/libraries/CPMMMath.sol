@@ -48,7 +48,7 @@ library CPMMMath {
             newPoolNo = newNo;
         }
 
-        if (shares == 0) revert Errors.InsufficientLiquidity();
+        if (shares == 0) revert Errors.InsufficientShares();
         if (newPoolYes < MIN_POOL) revert Errors.PoolTooLow();
         if (newPoolNo < MIN_POOL) revert Errors.PoolTooLow();
     }
@@ -79,7 +79,7 @@ library CPMMMath {
         uint256 totalWinningPool,
         uint256 totalLosingPool
     ) internal pure returns (uint256) {
-        if (totalWinningPool == 0) revert Errors.PoolTooLow();
+        if (totalWinningPool == 0) revert Errors.InvalidPool();
         return shares + (shares * totalLosingPool) / totalWinningPool;
     }
 
@@ -87,7 +87,7 @@ library CPMMMath {
         uint256 expectedShares,
         uint16 slippageBps
     ) internal pure returns (uint256) {
-        if (slippageBps > BPS_DENOMINATOR) revert Errors.SlippageExceeded();
+        if (slippageBps > BPS_DENOMINATOR) revert Errors.InvalidSlippage();
         return
             expectedShares - (expectedShares * slippageBps) / BPS_DENOMINATOR;
     }

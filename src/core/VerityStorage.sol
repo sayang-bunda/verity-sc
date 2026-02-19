@@ -2,10 +2,11 @@
 pragma solidity ^0.8.24;
 
 import {DataTypes} from "../libraries/DataTypes.sol";
+import {Errors} from "../libraries/Errors.sol";
 
 abstract contract VerityStorage {
-    address public usdc;
-    address public positionToken;
+    address public immutable USDC;
+    address public immutable POSITION_TOKEN;
     uint256 public marketCount;
 
     mapping(uint256 => DataTypes.Market) internal markets;
@@ -14,6 +15,18 @@ abstract contract VerityStorage {
     mapping(uint256 => bool) internal seeded;
     mapping(uint256 => mapping(address => bool)) internal claimed;
     mapping(uint256 => uint256) internal accumulatedFees;
+
+    constructor(address _usdc, address _positionToken) {
+        if (_usdc == address(0)) revert Errors.ZeroAddress();
+        if (_positionToken == address(0)) revert Errors.ZeroAddress();
+        USDC = _usdc;
+        POSITION_TOKEN = _positionToken;
+    }
+
+    function _requireMarketExists(uint256 marketId) internal view {
+        if (markets[marketId].creator == address(0))
+            revert Errors.MarketNotFound();
+    }
 
     function getMarket(
         uint256 marketId

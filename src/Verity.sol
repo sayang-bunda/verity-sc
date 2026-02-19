@@ -16,12 +16,11 @@ import {CPMMMath} from "./libraries/CPMMMath.sol";
 
 import {BettingEngine} from "./modules/BettingEngine.sol";
 import {CREAdapter} from "./adapters/CREAdapter.sol";
+import {VerityStorage} from "./core/VerityStorage.sol";
 
 interface IPositionToken {
     function mint(address to, uint256 tokenId, uint256 amount) external;
     function burn(address from, uint256 tokenId, uint256 amount) external;
-    function getYesTokenId(uint256 marketId) external pure returns (uint256);
-    function getNoTokenId(uint256 marketId) external pure returns (uint256);
 }
 
 contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
@@ -39,13 +38,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         address _positionToken,
         address _admin,
         address _cre
-    ) {
-        if (_usdc == address(0)) revert Errors.ZeroAddress();
-        if (_positionToken == address(0)) revert Errors.ZeroAddress();
-
-        usdc = _usdc;
-        positionToken = _positionToken;
-
+    ) VerityStorage(_usdc, _positionToken) {
         _setupRoles(_admin, _cre);
     }
 
@@ -54,6 +47,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         uint128 amountYes,
         uint128 amountNo
     ) external nonReentrant {
+        _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.creator != msg.sender) revert Errors.Unauthorized();
@@ -64,10 +58,10 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         CPMMMath.validateInitialPools(amountYes, amountNo);
 
         seeded[marketId] = true;
-        m.poolYes += amountYes;
-        m.poolNo += amountNo;
+        m.poolYes = amountYes;
+        m.poolNo = amountNo;
 
-        IERC20(usdc).safeTransferFrom(
+        IERC20(USDC).safeTransferFrom(
             msg.sender,
             address(this),
             uint256(amountYes) + uint256(amountNo)
@@ -82,6 +76,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         bool isYes,
         uint256 minShares
     ) external nonReentrant {
+        _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.status != uint8(DataTypes.MarketStatus.Active))
@@ -113,12 +108,11 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             pos.totalBetNo += _toU128(amount);
         }
 
-        IERC20(usdc).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(USDC).safeTransferFrom(msg.sender, address(this), amount);
 
-        uint256 tokenId = isYes
-            ? IPositionToken(positionToken).getYesTokenId(marketId)
-            : IPositionToken(positionToken).getNoTokenId(marketId);
-        IPositionToken(positionToken).mint(msg.sender, tokenId, shares);
+        // Token ID: even = YES, odd = NO (inline to save external call gas)
+        uint256 tokenId = isYes ? marketId * 2 : marketId * 2 + 1;
+        IPositionToken(POSITION_TOKEN).mint(msg.sender, tokenId, shares);
 
         emit Events.BetPlaced(
             marketId,
@@ -131,6 +125,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     }
 
     function claimPayout(uint256 marketId) external nonReentrant {
+        _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.status != uint8(DataTypes.MarketStatus.Resolved))
@@ -151,19 +146,18 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         claimed[marketId][msg.sender] = true;
 
         bool isYesWin = m.outcome == uint8(DataTypes.MarketOutcome.Yes);
-        uint256 tokenId = isYesWin
-            ? IPositionToken(positionToken).getYesTokenId(marketId)
-            : IPositionToken(positionToken).getNoTokenId(marketId);
+        uint256 tokenId = isYesWin ? marketId * 2 : marketId * 2 + 1;
         uint256 shares = isYesWin ? pos.yesShares : pos.noShares;
 
         if (shares > 0)
-            IPositionToken(positionToken).burn(msg.sender, tokenId, shares);
+            IPositionToken(POSITION_TOKEN).burn(msg.sender, tokenId, shares);
 
-        IERC20(usdc).safeTransfer(msg.sender, payout);
+        IERC20(USDC).safeTransfer(msg.sender, payout);
         emit Events.PayoutClaimed(marketId, msg.sender, payout);
     }
 
     function claimRefund(uint256 marketId) external nonReentrant {
+        _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.status != uint8(DataTypes.MarketStatus.Escalated))
@@ -176,25 +170,26 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         claimed[marketId][msg.sender] = true;
 
         if (pos.yesShares > 0) {
-            IPositionToken(positionToken).burn(
+            IPositionToken(POSITION_TOKEN).burn(
                 msg.sender,
-                IPositionToken(positionToken).getYesTokenId(marketId),
+                marketId * 2,
                 pos.yesShares
             );
         }
         if (pos.noShares > 0) {
-            IPositionToken(positionToken).burn(
+            IPositionToken(POSITION_TOKEN).burn(
                 msg.sender,
-                IPositionToken(positionToken).getNoTokenId(marketId),
+                marketId * 2 + 1,
                 pos.noShares
             );
         }
 
-        IERC20(usdc).safeTransfer(msg.sender, refund);
+        IERC20(USDC).safeTransfer(msg.sender, refund);
         emit Events.RefundProcessed(marketId, msg.sender, refund);
     }
 
     function withdrawFees(uint256 marketId) external nonReentrant {
+        _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.creator != msg.sender) revert Errors.Unauthorized();
@@ -205,7 +200,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         if (fees == 0) revert Errors.NothingToClaim();
 
         accumulatedFees[marketId] = 0;
-        IERC20(usdc).safeTransfer(msg.sender, fees);
+        IERC20(USDC).safeTransfer(msg.sender, fees);
 
         emit Events.FeeWithdrawn(marketId, msg.sender, fees);
     }

@@ -7,7 +7,6 @@ import {MarketFactory} from "../modules/MarketFactory.sol";
 import {RiskEngine} from "../modules/RiskEngine.sol";
 import {SettlementEngine} from "../modules/SettlementEngine.sol";
 
-
 abstract contract CREAdapter is
     AccessManager,
     MarketFactory,
@@ -38,18 +37,21 @@ abstract contract CREAdapter is
         uint8 score,
         string calldata reason
     ) external onlyCre {
+        _requireMarketExists(marketId);
         _reportManipulation(marketId, score, reason);
     }
-    function resolveMarketFromCre(  
+    function resolveMarketFromCre(
         uint256 marketId,
         uint8 outcome,
         uint8 confidence
     ) external onlyCre {
+        _requireMarketExists(marketId);
         if (block.timestamp < markets[marketId].deadline)
             revert Errors.DeadlineNotReached();
         _resolveMarket(marketId, outcome, confidence);
     }
     function unpauseMarket(uint256 marketId) external onlyAdmin {
+        _requireMarketExists(marketId);
         _unpauseMarket(marketId);
     }
 }
