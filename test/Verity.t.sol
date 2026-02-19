@@ -289,6 +289,7 @@ contract VerityTest is Test {
 
     function test_TC21_ResolveHighConfidence() public {
         marketId = _createMarket();
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -303,6 +304,7 @@ contract VerityTest is Test {
 
     function test_TC22_EscalateLowConfidence() public {
         marketId = _createMarket();
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -317,6 +319,7 @@ contract VerityTest is Test {
 
     function test_TC23_CannotReResolve() public {
         marketId = _createMarket();
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.startPrank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -339,6 +342,7 @@ contract VerityTest is Test {
         _seedMarket(marketId);
         _placeBet(bob, marketId, true, BET_AMOUNT);
 
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -359,6 +363,7 @@ contract VerityTest is Test {
         _seedMarket(marketId);
         _placeBet(charlie, marketId, false, BET_AMOUNT);
 
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -376,6 +381,7 @@ contract VerityTest is Test {
         _seedMarket(marketId);
         _placeBet(bob, marketId, true, BET_AMOUNT);
 
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -397,6 +403,7 @@ contract VerityTest is Test {
         _seedMarket(marketId);
         _placeBet(bob, marketId, true, BET_AMOUNT);
 
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
@@ -417,6 +424,15 @@ contract VerityTest is Test {
         marketId = _createMarket();
         _seedMarket(marketId);
         _placeBet(bob, marketId, true, BET_AMOUNT);
+
+        // Resolve market first (required by withdrawFees security check)
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+        vm.prank(cre);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         uint256 fees = verity.getAccumulatedFees(marketId);
         uint256 balBefore = usdc.balanceOf(alice);
@@ -446,6 +462,7 @@ contract VerityTest is Test {
         _placeBet(bob, marketId, true, BET_AMOUNT);
         _placeBet(charlie, marketId, false, BET_AMOUNT);
 
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
         verity.resolveMarketFromCre(
             marketId,
