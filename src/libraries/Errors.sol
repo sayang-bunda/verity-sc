@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 library Errors {
-    
     // ACCESS / AUTH
     error Unauthorized();
     error ZeroAddress();
@@ -19,7 +18,7 @@ library Errors {
     error InvalidMarketId();
     error InvalidCategory();
     error VerityContractAlreadySet();
-    
+
     // DEADLINE
     error DeadlineNotReached();
     error DeadlineAlreadyPassed();
@@ -31,7 +30,7 @@ library Errors {
     error InvalidFeeBps();
     error InvalidSlippage();
 
-    // POOL / LIQUIDITY 
+    // POOL / LIQUIDITY
     error PoolTooLow();
     error PoolImbalanced();
     error InvalidPool();
@@ -39,7 +38,7 @@ library Errors {
     error InsufficientShares();
     error AlreadySeeded();
     error SlippageExceeded();
-    
+
     // OUTCOME / CLAIM / REFUND
     error InvalidOutcome();
     error InvalidConfidence();
