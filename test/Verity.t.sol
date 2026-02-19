@@ -185,6 +185,8 @@ contract VerityTest is Test {
 
         DataTypes.UserPosition memory pos = verity.getPosition(marketId, bob);
         assertGt(pos.yesShares, 0);
+        // casting to 'uint128' is safe because BET_AMOUNT is a small test constant (100e6)
+        // forge-lint: disable-next-line(unsafe-typecast)
         assertEq(pos.totalBetYes, uint128(BET_AMOUNT));
         assertLt(usdc.balanceOf(bob), balBefore);
     }

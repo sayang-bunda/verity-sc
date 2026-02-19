@@ -12,8 +12,12 @@ contract PositionToken is ERC1155, Ownable {
     event VerityContractSet(address indexed verity);
 
     modifier onlyVerity() {
-        if (msg.sender != verityContract) revert Errors.Unauthorized();
+        _onlyVerity();
         _;
+    }
+
+    function _onlyVerity() internal view {
+        if (msg.sender != verityContract) revert Errors.Unauthorized();
     }
 
     constructor() ERC1155("") Ownable(msg.sender) {}

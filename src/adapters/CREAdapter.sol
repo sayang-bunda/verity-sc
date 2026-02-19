@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {DataTypes} from "../libraries/DataTypes.sol";
 import {Errors} from "../libraries/Errors.sol";
 import {AccessManager} from "../security/AccessManager.sol";
 import {MarketFactory} from "../modules/MarketFactory.sol";
@@ -41,11 +40,13 @@ abstract contract CREAdapter is
     ) external onlyCre {
         _reportManipulation(marketId, score, reason);
     }
-    function resolveMarketFromCre(
+    function resolveMarketFromCre(  
         uint256 marketId,
         uint8 outcome,
         uint8 confidence
     ) external onlyCre {
+        if (block.timestamp < markets[marketId].deadline)
+            revert Errors.DeadlineNotReached();
         _resolveMarket(marketId, outcome, confidence);
     }
     function unpauseMarket(uint256 marketId) external onlyAdmin {

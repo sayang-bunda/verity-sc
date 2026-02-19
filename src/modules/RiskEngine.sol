@@ -32,7 +32,7 @@ abstract contract RiskEngine is VerityStorage {
         DataTypes.Market storage m = markets[marketId];
 
         if (m.status != uint8(DataTypes.MarketStatus.Paused))
-            revert Errors.MarketNotActive();
+            revert Errors.MarketNotPaused();
 
         m.status = uint8(DataTypes.MarketStatus.Active);
         m.manipulationScore = 0;
