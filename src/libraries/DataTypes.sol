@@ -21,22 +21,22 @@ library DataTypes {
     }
 
     struct Market {
-        address creator;
-        uint64 deadline;
-        uint16 feeBps;
-        uint8 status;
-        uint8 outcome;
-        uint8 category;
-        uint8 manipulationScore;
-        uint128 poolYes;
-        uint128 poolNo;
-        uint256 totalVolume;
+    address creator;
+    uint64 deadline;
+    uint16 feeBps;
+    uint8 status;
+    uint8 outcome;
+    uint128 poolYes;
+    uint128 poolNo;
+    uint8 category;
+    uint8 manipulationScore;
+    uint256 totalVolume;
     }
 
     struct UserPosition {
-        uint128 yesShares;
-        uint128 noShares;
-        uint128 totalBetYes;
-        uint128 totalBetNo;
+    uint128 yesShares;
+    uint128 noShares;
+    uint128 totalBetYes;
+    uint128 totalBetNo;
     }
 }

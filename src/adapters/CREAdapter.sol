@@ -46,6 +46,8 @@ abstract contract CREAdapter is
         uint8 outcome,
         uint8 confidence
     ) external onlyCre {
+        if (block.timestamp < markets[marketId].deadline)
+            revert Errors.DeadlineNotReached();
         _resolveMarket(marketId, outcome, confidence);
     }
     function unpauseMarket(uint256 marketId) external onlyAdmin {
