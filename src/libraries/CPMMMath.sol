@@ -11,21 +11,10 @@ library CPMMMath {
     uint256 internal constant MAX_BET_AMOUNT = 1_000_000 * 1e6;
     uint256 internal constant MAX_POOL_RATIO = 1000;
 
-    function calcShares(
-        uint256 amount,
-        uint256 poolYes,
-        uint256 poolNo,
-        uint16 feeBps,
-        bool isYes
-    )
+    function calcShares(uint256 amount, uint256 poolYes, uint256 poolNo, uint16 feeBps, bool isYes)
         internal
         pure
-        returns (
-            uint256 shares,
-            uint256 feeAmount,
-            uint256 newPoolYes,
-            uint256 newPoolNo
-        )
+        returns (uint256 shares, uint256 feeAmount, uint256 newPoolYes, uint256 newPoolNo)
     {
         if (poolYes < MIN_POOL) revert Errors.PoolTooLow();
         if (poolNo < MIN_POOL) revert Errors.PoolTooLow();
@@ -53,43 +42,29 @@ library CPMMMath {
         if (newPoolNo < MIN_POOL) revert Errors.PoolTooLow();
     }
 
-    function calcPrice(
-        uint256 poolYes,
-        uint256 poolNo,
-        bool isYes
-    ) internal pure returns (uint256) {
+    function calcPrice(uint256 poolYes, uint256 poolNo, bool isYes) internal pure returns (uint256) {
         uint256 total = poolYes + poolNo;
         if (total == 0) revert Errors.PoolTooLow();
-        return
-            isYes
-                ? (poolNo * BPS_DENOMINATOR) / total
-                : (poolYes * BPS_DENOMINATOR) / total;
+        return isYes ? (poolNo * BPS_DENOMINATOR) / total : (poolYes * BPS_DENOMINATOR) / total;
     }
 
-    function calcFee(
-        uint256 amount,
-        uint16 feeBps
-    ) internal pure returns (uint256) {
+    function calcFee(uint256 amount, uint16 feeBps) internal pure returns (uint256) {
         if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
         return (amount * feeBps) / BPS_DENOMINATOR;
     }
 
-    function calcPayout(
-        uint256 shares,
-        uint256 totalWinningPool,
-        uint256 totalLosingPool
-    ) internal pure returns (uint256) {
+    function calcPayout(uint256 shares, uint256 totalWinningPool, uint256 totalLosingPool)
+        internal
+        pure
+        returns (uint256)
+    {
         if (totalWinningPool == 0) revert Errors.InvalidPool();
         return shares + (shares * totalLosingPool) / totalWinningPool;
     }
 
-    function calcMinShares(
-        uint256 expectedShares,
-        uint16 slippageBps
-    ) internal pure returns (uint256) {
+    function calcMinShares(uint256 expectedShares, uint16 slippageBps) internal pure returns (uint256) {
         if (slippageBps > BPS_DENOMINATOR) revert Errors.InvalidSlippage();
-        return
-            expectedShares - (expectedShares * slippageBps) / BPS_DENOMINATOR;
+        return expectedShares - (expectedShares * slippageBps) / BPS_DENOMINATOR;
     }
 
     function validateAmount(uint256 amount) internal pure {
@@ -97,15 +72,10 @@ library CPMMMath {
         if (amount > MAX_BET_AMOUNT) revert Errors.AmountTooHigh();
     }
 
-    function validateInitialPools(
-        uint256 poolYes,
-        uint256 poolNo
-    ) internal pure {
+    function validateInitialPools(uint256 poolYes, uint256 poolNo) internal pure {
         if (poolYes < MIN_POOL) revert Errors.PoolTooLow();
         if (poolNo < MIN_POOL) revert Errors.PoolTooLow();
-        uint256 ratio = poolYes > poolNo
-            ? (poolYes * 100) / poolNo
-            : (poolNo * 100) / poolYes;
+        uint256 ratio = poolYes > poolNo ? (poolYes * 100) / poolNo : (poolNo * 100) / poolYes;
         if (ratio > MAX_POOL_RATIO) revert Errors.PoolImbalanced();
     }
 }

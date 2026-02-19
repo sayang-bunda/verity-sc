@@ -21,8 +21,9 @@ abstract contract MarketFactory is VerityStorage {
         if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
         if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
-        if (category > uint8(type(DataTypes.MarketCategory).max))
+        if (category > uint8(type(DataTypes.MarketCategory).max)) {
             revert Errors.InvalidCategory();
+        }
 
         marketId = marketCount++;
 
@@ -35,14 +36,7 @@ abstract contract MarketFactory is VerityStorage {
         m.category = category;
 
         emit Events.MarketCreated(
-            marketId,
-            creator,
-            category,
-            deadline,
-            feeBps,
-            question,
-            resolutionCriteria,
-            dataSources
+            marketId, creator, category, deadline, feeBps, question, resolutionCriteria, dataSources
         );
     }
 }

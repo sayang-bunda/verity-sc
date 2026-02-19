@@ -27,8 +27,9 @@ abstract contract AccessManager is AccessControl {
     }
 
     function _setupRoles(address admin, address cre) internal {
-        if (admin == address(0) || cre == address(0))
+        if (admin == address(0) || cre == address(0)) {
             revert Errors.ZeroAddress();
+        }
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);

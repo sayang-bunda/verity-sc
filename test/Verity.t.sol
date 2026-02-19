@@ -67,12 +67,7 @@ contract VerityTest is Test {
         verity.seedLiquidity(id, SEED_AMOUNT, SEED_AMOUNT);
     }
 
-    function _placeBet(
-        address user,
-        uint256 id,
-        bool isYes,
-        uint256 amount
-    ) internal {
+    function _placeBet(address user, uint256 id, bool isYes, uint256 amount) internal {
         vm.prank(user);
         verity.placeBet(id, amount, isYes, 0);
     }
@@ -109,13 +104,7 @@ contract VerityTest is Test {
         vm.prank(alice);
         vm.expectRevert(Errors.Unauthorized.selector);
         verity.createMarketFromCre(
-            alice,
-            uint64(block.timestamp + DEADLINE_OFFSET),
-            FEE_BPS,
-            CATEGORY_CRYPTO,
-            "Test?",
-            "Criteria",
-            "Sources"
+            alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
         );
     }
 
@@ -123,13 +112,7 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.DeadlineAlreadyPassed.selector);
         verity.createMarketFromCre(
-            alice,
-            uint64(block.timestamp - 1),
-            FEE_BPS,
-            CATEGORY_CRYPTO,
-            "Test?",
-            "Criteria",
-            "Sources"
+            alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
         );
     }
 
@@ -137,13 +120,7 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.InvalidFeeBps.selector);
         verity.createMarketFromCre(
-            alice,
-            uint64(block.timestamp + DEADLINE_OFFSET),
-            1001,
-            CATEGORY_CRYPTO,
-            "Test?",
-            "Criteria",
-            "Sources"
+            alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
         );
     }
 
@@ -248,10 +225,7 @@ contract VerityTest is Test {
         vm.prank(cre);
         verity.reportManipulation(marketId, 50, "Minor anomaly");
 
-        assertEq(
-            verity.getMarket(marketId).status,
-            uint8(DataTypes.MarketStatus.Active)
-        );
+        assertEq(verity.getMarket(marketId).status, uint8(DataTypes.MarketStatus.Active));
     }
 
     function test_TC18_AdminCanUnpause() public {
@@ -291,11 +265,7 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
@@ -306,11 +276,7 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.No),
-            70
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 70);
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Escalated));
@@ -321,17 +287,9 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.startPrank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
         vm.expectRevert(Errors.MarketAlreadyResolved.selector);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.No),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 95);
         vm.stopPrank();
     }
 
@@ -344,11 +302,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -365,11 +319,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
         vm.prank(charlie);
         vm.expectRevert(Errors.NothingToClaim.selector);
@@ -383,11 +333,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
         vm.startPrank(bob);
         verity.claimPayout(marketId);
@@ -405,11 +351,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            70
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70);
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -428,11 +370,7 @@ contract VerityTest is Test {
         // Resolve market first (required by withdrawFees security check)
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
         uint256 fees = verity.getAccumulatedFees(marketId);
         uint256 balBefore = usdc.balanceOf(alice);
@@ -464,16 +402,9 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(
-            marketId,
-            uint8(DataTypes.MarketOutcome.Yes),
-            95
-        );
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
 
-        assertEq(
-            verity.getMarket(marketId).status,
-            uint8(DataTypes.MarketStatus.Resolved)
-        );
+        assertEq(verity.getMarket(marketId).status, uint8(DataTypes.MarketStatus.Resolved));
 
         uint256 bobBefore = usdc.balanceOf(bob);
         uint256 aliceBefore = usdc.balanceOf(alice);

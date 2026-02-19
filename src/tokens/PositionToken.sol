@@ -24,25 +24,18 @@ contract PositionToken is ERC1155, Ownable {
 
     function setVerityContract(address _verity) external onlyOwner {
         if (_verity == address(0)) revert Errors.InvalidAddress();
-        if (verityContract != address(0))
+        if (verityContract != address(0)) {
             revert Errors.VerityContractAlreadySet();
+        }
         verityContract = _verity;
         emit VerityContractSet(_verity);
     }
 
-    function mint(
-        address to,
-        uint256 tokenId,
-        uint256 amount
-    ) external onlyVerity {
+    function mint(address to, uint256 tokenId, uint256 amount) external onlyVerity {
         _mint(to, tokenId, amount, "");
     }
 
-    function burn(
-        address from,
-        uint256 tokenId,
-        uint256 amount
-    ) external onlyVerity {
+    function burn(address from, uint256 tokenId, uint256 amount) external onlyVerity {
         _burn(from, tokenId, amount);
     }
 

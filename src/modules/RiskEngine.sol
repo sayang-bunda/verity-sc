@@ -9,15 +9,12 @@ import {VerityStorage} from "../core/VerityStorage.sol";
 abstract contract RiskEngine is VerityStorage {
     uint8 public constant MANIPULATION_THRESHOLD = 70;
 
-    function _reportManipulation(
-        uint256 marketId,
-        uint8 score,
-        string calldata reason
-    ) internal {
+    function _reportManipulation(uint256 marketId, uint8 score, string calldata reason) internal {
         DataTypes.Market storage m = markets[marketId];
 
-        if (m.status != uint8(DataTypes.MarketStatus.Active))
+        if (m.status != uint8(DataTypes.MarketStatus.Active)) {
             revert Errors.MarketNotActive();
+        }
 
         m.manipulationScore = score;
         emit Events.ManipulationDetected(marketId, score, reason);
@@ -31,8 +28,9 @@ abstract contract RiskEngine is VerityStorage {
     function _unpauseMarket(uint256 marketId) internal {
         DataTypes.Market storage m = markets[marketId];
 
-        if (m.status != uint8(DataTypes.MarketStatus.Paused))
+        if (m.status != uint8(DataTypes.MarketStatus.Paused)) {
             revert Errors.MarketNotPaused();
+        }
 
         m.status = uint8(DataTypes.MarketStatus.Active);
         m.manipulationScore = 0;

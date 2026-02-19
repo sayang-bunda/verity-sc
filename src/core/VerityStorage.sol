@@ -10,8 +10,7 @@ abstract contract VerityStorage {
     uint256 public marketCount;
 
     mapping(uint256 => DataTypes.Market) internal markets;
-    mapping(uint256 => mapping(address => DataTypes.UserPosition))
-        internal positions;
+    mapping(uint256 => mapping(address => DataTypes.UserPosition)) internal positions;
     mapping(uint256 => bool) internal seeded;
     mapping(uint256 => mapping(address => bool)) internal claimed;
     mapping(uint256 => uint256) internal accumulatedFees;
@@ -24,20 +23,16 @@ abstract contract VerityStorage {
     }
 
     function _requireMarketExists(uint256 marketId) internal view {
-        if (markets[marketId].creator == address(0))
+        if (markets[marketId].creator == address(0)) {
             revert Errors.MarketNotFound();
+        }
     }
 
-    function getMarket(
-        uint256 marketId
-    ) external view returns (DataTypes.Market memory) {
+    function getMarket(uint256 marketId) external view returns (DataTypes.Market memory) {
         return markets[marketId];
     }
 
-    function getPosition(
-        uint256 marketId,
-        address user
-    ) external view returns (DataTypes.UserPosition memory) {
+    function getPosition(uint256 marketId, address user) external view returns (DataTypes.UserPosition memory) {
         return positions[marketId][user];
     }
 
@@ -45,16 +40,11 @@ abstract contract VerityStorage {
         return seeded[marketId];
     }
 
-    function isClaimed(
-        uint256 marketId,
-        address user
-    ) external view returns (bool) {
+    function isClaimed(uint256 marketId, address user) external view returns (bool) {
         return claimed[marketId][user];
     }
 
-    function getAccumulatedFees(
-        uint256 marketId
-    ) external view returns (uint256) {
+    function getAccumulatedFees(uint256 marketId) external view returns (uint256) {
         return accumulatedFees[marketId];
     }
 }
