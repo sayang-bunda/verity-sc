@@ -56,7 +56,7 @@ contract DeployVerity is Script {
         vm.stopBroadcast();
 
         console2.log("--- Deployment Summary ---");
-        console2.log("Network:", vm.activeChainId());
+        console2.log("Network (Chain ID):", block.chainid);
         console2.log("Verity Admin:", adminAddress);
         console2.log("Oracle Service:", creAddress);
         console2.log("USDC Address:", usdc);

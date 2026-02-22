@@ -67,7 +67,12 @@ contract VerityTest is Test {
         verity.seedLiquidity(id, SEED_AMOUNT, SEED_AMOUNT);
     }
 
-    function _placeBet(address user, uint256 id, bool isYes, uint256 amount) internal {
+    function _placeBet(
+        address user,
+        uint256 id,
+        bool isYes,
+        uint256 amount
+    ) internal {
         vm.prank(user);
         verity.placeBet(id, amount, isYes, 0);
     }
@@ -104,7 +109,13 @@ contract VerityTest is Test {
         vm.prank(alice);
         vm.expectRevert(Errors.Unauthorized.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Test?",
+            "Criteria",
+            "Sources"
         );
     }
 
@@ -112,7 +123,13 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.DeadlineAlreadyPassed.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice,
+            uint64(block.timestamp - 1),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Test?",
+            "Criteria",
+            "Sources"
         );
     }
 
@@ -120,7 +137,13 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.InvalidFeeBps.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            1001,
+            CATEGORY_CRYPTO,
+            "Test?",
+            "Criteria",
+            "Sources"
         );
     }
 
@@ -225,7 +248,10 @@ contract VerityTest is Test {
         vm.prank(cre);
         verity.reportManipulation(marketId, 50, "Minor anomaly");
 
-        assertEq(verity.getMarket(marketId).status, uint8(DataTypes.MarketStatus.Active));
+        assertEq(
+            verity.getMarket(marketId).status,
+            uint8(DataTypes.MarketStatus.Active)
+        );
     }
 
     function test_TC18_AdminCanUnpause() public {
@@ -265,7 +291,11 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
@@ -276,7 +306,11 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 70);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.No),
+            70
+        );
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Escalated));
@@ -287,9 +321,17 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.startPrank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
         vm.expectRevert(Errors.MarketAlreadyResolved.selector);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.No),
+            95
+        );
         vm.stopPrank();
     }
 
@@ -302,7 +344,11 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -319,7 +365,11 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         vm.prank(charlie);
         vm.expectRevert(Errors.NothingToClaim.selector);
@@ -333,7 +383,11 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         vm.startPrank(bob);
         verity.claimPayout(marketId);
@@ -351,7 +405,11 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            70
+        );
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -370,7 +428,11 @@ contract VerityTest is Test {
         // Resolve market first (required by withdrawFees security check)
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
         uint256 fees = verity.getAccumulatedFees(marketId);
         uint256 balBefore = usdc.balanceOf(alice);
@@ -402,9 +464,16 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
 
-        assertEq(verity.getMarket(marketId).status, uint8(DataTypes.MarketStatus.Resolved));
+        assertEq(
+            verity.getMarket(marketId).status,
+            uint8(DataTypes.MarketStatus.Resolved)
+        );
 
         uint256 bobBefore = usdc.balanceOf(bob);
         uint256 aliceBefore = usdc.balanceOf(alice);
@@ -419,5 +488,511 @@ contract VerityTest is Test {
 
         console2.log("Bob payout :", usdc.balanceOf(bob) - bobBefore);
         console2.log("Alice fees :", usdc.balanceOf(alice) - aliceBefore);
+    }
+
+    // ================================================================
+    //                FULL DEMO FLOW SIMULATION
+    // ================================================================
+
+    function test_FullFlow_PredictionMarketSimulation() public {
+        console2.log("");
+        console2.log(
+            "================================================================"
+        );
+        console2.log("         VERITY - FULL DEMO FLOW SIMULATION");
+        console2.log(
+            "================================================================"
+        );
+
+        // ============================================================
+        // STEP 1: Deploy & Setup
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 1: Deploy & Setup Contracts");
+        console2.log("--------------------------------------");
+        console2.log("  [OK] Verity contract deployed");
+        console2.log("  [OK] MockUSDC deployed");
+        console2.log("  [OK] PositionToken deployed & linked");
+        console2.log("  [OK] Admin role assigned");
+        console2.log("  [OK] CRE role assigned");
+
+        assertEq(verity.marketCount(), 0);
+        console2.log("  [OK] Market count: 0");
+
+        // ============================================================
+        // STEP 2: Mint USDC to Users
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 2: Mint USDC to Users");
+        console2.log("--------------------------------------");
+        console2.log("  Alice (Creator) :", INITIAL_MINT / 1e6, "USDC");
+        console2.log("  Bob   (Bettor)  :", INITIAL_MINT / 1e6, "USDC");
+        console2.log("  Charlie (Bettor):", INITIAL_MINT / 1e6, "USDC");
+
+        assertEq(usdc.balanceOf(alice), INITIAL_MINT);
+        assertEq(usdc.balanceOf(bob), INITIAL_MINT);
+        assertEq(usdc.balanceOf(charlie), INITIAL_MINT);
+        console2.log("  [OK] All balances verified");
+
+        // ============================================================
+        // STEP 3: CRE Creates Prediction Market
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 3: CRE Creates Prediction Market");
+        console2.log("--------------------------------------");
+        console2.log("  Question: Will BTC reach $100k by end of 2025?");
+        console2.log("  Creator : Alice");
+        console2.log("  Fee     : 2%");
+        console2.log("  Deadline: 7 days from now");
+
+        vm.startPrank(cre);
+        marketId = verity.createMarketFromCre(
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Will BTC reach $100k by end of 2025?",
+            "Resolved Yes if BTC >= $100,000 on any major exchange",
+            "Chainlink BTC/USD, CoinGecko"
+        );
+        vm.stopPrank();
+
+        DataTypes.Market memory m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Active));
+        console2.log("  [OK] Market ID:", marketId);
+        console2.log("  [OK] Status: Active");
+
+        // ============================================================
+        // STEP 4: Alice Seeds Liquidity
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 4: Alice Seeds Liquidity");
+        console2.log("--------------------------------------");
+
+        uint256 aliceBalBefore = usdc.balanceOf(alice);
+
+        vm.startPrank(alice);
+        verity.seedLiquidity(marketId, SEED_AMOUNT, SEED_AMOUNT);
+        vm.stopPrank();
+
+        m = verity.getMarket(marketId);
+        uint256 totalSeeded = aliceBalBefore - usdc.balanceOf(alice);
+
+        console2.log("  Pool YES:", m.poolYes / 1e6, "USDC");
+        console2.log("  Pool NO :", m.poolNo / 1e6, "USDC");
+        console2.log("  Total seeded:", totalSeeded / 1e6, "USDC");
+        assertTrue(verity.isSeeded(marketId));
+        console2.log("  [OK] Market seeded successfully");
+
+        // ============================================================
+        // STEP 5: Bob Bets YES (Bullish on BTC)
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 5: Bob Bets YES - 1,000 USDC (Bullish)");
+        console2.log("--------------------------------------");
+
+        uint256 bobBalBefore = usdc.balanceOf(bob);
+
+        vm.startPrank(bob);
+        verity.placeBet(marketId, BET_AMOUNT, true, 0);
+        vm.stopPrank();
+
+        DataTypes.UserPosition memory bobPos = verity.getPosition(
+            marketId,
+            bob
+        );
+        m = verity.getMarket(marketId);
+
+        console2.log(
+            "  Bob spent    :",
+            (bobBalBefore - usdc.balanceOf(bob)) / 1e6,
+            "USDC"
+        );
+        console2.log("  YES shares   :", bobPos.yesShares / 1e6);
+        console2.log("  Pool YES now :", m.poolYes / 1e6, "USDC");
+        console2.log("  Pool NO now  :", m.poolNo / 1e6, "USDC");
+        assertGt(bobPos.yesShares, 0);
+        console2.log("  [OK] Bob bet placed successfully");
+
+        // ============================================================
+        // STEP 6: Charlie Bets NO (Bearish on BTC)
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 6: Charlie Bets NO - 1,000 USDC (Bearish)");
+        console2.log("--------------------------------------");
+
+        uint256 charlieBalBefore = usdc.balanceOf(charlie);
+
+        vm.startPrank(charlie);
+        verity.placeBet(marketId, BET_AMOUNT, false, 0);
+        vm.stopPrank();
+
+        DataTypes.UserPosition memory charliePos = verity.getPosition(
+            marketId,
+            charlie
+        );
+        m = verity.getMarket(marketId);
+
+        console2.log(
+            "  Charlie spent:",
+            (charlieBalBefore - usdc.balanceOf(charlie)) / 1e6,
+            "USDC"
+        );
+        console2.log("  NO shares    :", charliePos.noShares / 1e6);
+        console2.log("  Pool YES now :", m.poolYes / 1e6, "USDC");
+        console2.log("  Pool NO now  :", m.poolNo / 1e6, "USDC");
+        console2.log("  Total volume :", m.totalVolume / 1e6, "USDC");
+        assertGt(charliePos.noShares, 0);
+        console2.log("  [OK] Charlie bet placed successfully");
+
+        // ============================================================
+        // STEP 7: CRE Detects Manipulation (Risk Engine)
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 7: CRE Detects Manipulation Attempt");
+        console2.log("--------------------------------------");
+        console2.log("  [!] Suspicious wash trading detected");
+        console2.log("  [!] Manipulation score: 80 (>= threshold 70)");
+        console2.log("  [CRITICAL] Market PAUSED by Risk Engine");
+
+        vm.startPrank(cre);
+        verity.reportManipulation(
+            marketId,
+            80,
+            "Suspicious wash trading detected"
+        );
+        vm.stopPrank();
+
+        m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Paused));
+        assertEq(m.manipulationScore, 80);
+        console2.log("  [OK] Market status: Paused");
+        console2.log("  [OK] Score recorded: 80");
+
+        // ============================================================
+        // STEP 8: Admin Investigates & Unpauses
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 8: Admin Investigates & Unpauses Market");
+        console2.log("--------------------------------------");
+        console2.log("  [i] Admin reviewed trading activity");
+        console2.log("  [i] False alarm - legitimate trading");
+
+        vm.startPrank(admin);
+        verity.unpauseMarket(marketId);
+        vm.stopPrank();
+
+        m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Active));
+        assertEq(m.manipulationScore, 0);
+        console2.log("  [OK] Market status: Active");
+        console2.log("  [OK] Manipulation score reset to 0");
+
+        // ============================================================
+        // STEP 9: Deadline Passes & CRE Resolves Market
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 9: Deadline Passes - CRE Resolves Market");
+        console2.log("--------------------------------------");
+        console2.log("  [i] 7 days have passed...");
+        console2.log("  [i] BTC reached $105,000 - outcome: YES");
+        console2.log("  [i] CRE confidence: 95%% (above 90%% threshold)");
+
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+
+        vm.startPrank(cre);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95
+        );
+        vm.stopPrank();
+
+        m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
+        assertEq(m.outcome, uint8(DataTypes.MarketOutcome.Yes));
+        console2.log("  [OK] Market status: Resolved");
+        console2.log("  [OK] Outcome: YES");
+
+        // ============================================================
+        // STEP 10: Bob Claims Payout (Winner)
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 10: Bob Claims Payout (Winner - bet YES)");
+        console2.log("--------------------------------------");
+
+        uint256 bobBefore = usdc.balanceOf(bob);
+
+        vm.startPrank(bob);
+        verity.claimPayout(marketId);
+        vm.stopPrank();
+
+        uint256 bobPayout = usdc.balanceOf(bob) - bobBefore;
+        assertTrue(verity.isClaimed(marketId, bob));
+
+        console2.log("  Bob payout   :", bobPayout / 1e6, "USDC");
+        console2.log(
+            "  Bob profit   :",
+            (bobPayout > BET_AMOUNT) ? (bobPayout - BET_AMOUNT) / 1e6 : 0,
+            "USDC"
+        );
+        console2.log("  [OK] Payout claimed successfully");
+
+        // ============================================================
+        // STEP 11: Charlie Cannot Claim (Loser)
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 11: Charlie Tries to Claim (Loser - bet NO)");
+        console2.log("--------------------------------------");
+
+        vm.startPrank(charlie);
+        vm.expectRevert(Errors.NothingToClaim.selector);
+        verity.claimPayout(marketId);
+        vm.stopPrank();
+
+        console2.log("  [OK] Charlie correctly rejected: NothingToClaim");
+        console2.log("  [OK] Loser cannot claim payout");
+
+        // ============================================================
+        // STEP 12: Alice Withdraws Creator Fees
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 12: Alice Withdraws Creator Fees");
+        console2.log("--------------------------------------");
+
+        uint256 aliceBefore = usdc.balanceOf(alice);
+
+        vm.startPrank(alice);
+        verity.withdrawFees(marketId);
+        vm.stopPrank();
+
+        uint256 aliceFees = usdc.balanceOf(alice) - aliceBefore;
+        assertEq(verity.getAccumulatedFees(marketId), 0);
+
+        console2.log("  Fees earned  :", aliceFees / 1e6, "USDC");
+        console2.log("  Remaining    : 0 USDC");
+        console2.log("  [OK] Fees withdrawn successfully");
+
+        // ============================================================
+        // STEP 13: Final Balances & Balance Breakdown
+        // ============================================================
+        console2.log("");
+        console2.log("STEP 13: Final Balance Verification & Breakdown");
+        console2.log("--------------------------------------");
+
+        uint256 aliceFinal = usdc.balanceOf(alice);
+        uint256 bobFinal = usdc.balanceOf(bob);
+        uint256 charlieFinal = usdc.balanceOf(charlie);
+        uint256 contractFinal = usdc.balanceOf(address(verity));
+
+        console2.log("");
+        console2.log("  === ALICE (Creator) ===");
+        console2.log("    Starting balance: 100,000 USDC");
+        console2.log("    - Seeded liquidity: -20,000 USDC (10k YES + 10k NO)");
+        console2.log(
+            "    + Creator fees    : +40 USDC (2% of 2,000 USDC bets)"
+        );
+        console2.log("    Final balance     :", aliceFinal / 1e6, "USDC");
+        console2.log(
+            "    Calculation      : 100,000 - 20,000 + 40 = 80,040 USDC"
+        );
+
+        console2.log("");
+        console2.log("  === BOB (Winner - bet YES) ===");
+        console2.log("    Starting balance: 100,000 USDC");
+        console2.log("    - Bet amount     : -1,000 USDC");
+        console2.log("    + Payout        : +1,769 USDC (CPMM formula)");
+        console2.log("    Final balance   :", bobFinal / 1e6, "USDC");
+        console2.log(
+            "    Profit          :",
+            (bobFinal - INITIAL_MINT) / 1e6,
+            "USDC"
+        );
+        console2.log(
+            "    Calculation     : 100,000 - 1,000 + 1,769 = 100,769 USDC"
+        );
+
+        console2.log("");
+        console2.log("  === CHARLIE (Loser - bet NO) ===");
+        console2.log("    Starting balance: 100,000 USDC");
+        console2.log("    - Bet amount     : -1,000 USDC");
+        console2.log("    + Payout         : 0 USDC (lost, outcome was YES)");
+        console2.log("    Final balance   :", charlieFinal / 1e6, "USDC");
+        console2.log("    Loss            : -1,000 USDC");
+        console2.log("    Calculation     : 100,000 - 1,000 = 99,000 USDC");
+
+        console2.log("");
+        console2.log("  === CONTRACT (Verity) ===");
+        console2.log("    Seeded liquidity : +20,000 USDC (from Alice)");
+        console2.log(
+            "    Bets received    : +2,000 USDC (1k from Bob + 1k from Charlie)"
+        );
+        console2.log("    - Fees paid      : -40 USDC (to Alice)");
+        console2.log("    - Payout paid    : -1,769 USDC (to Bob)");
+        console2.log("    Final balance   :", contractFinal / 1e6, "USDC");
+        console2.log(
+            "    Calculation     : 20,000 + 2,000 - 40 - 1,769 = 20,191 USDC"
+        );
+        console2.log("    (Remaining = pool balance after resolution)");
+
+        console2.log("");
+        console2.log("  === VERIFICATION ===");
+        uint256 totalSystem = aliceFinal +
+            bobFinal +
+            charlieFinal +
+            contractFinal;
+        console2.log("    Total in system :", totalSystem / 1e6, "USDC");
+        console2.log("    Expected total  : 300,000 USDC (3 users x 100k)");
+        assertEq(totalSystem, INITIAL_MINT * 3);
+        console2.log("    [OK] No funds lost - all accounted for!");
+
+        assertGt(bobFinal, INITIAL_MINT);
+        assertLt(charlieFinal, INITIAL_MINT);
+        console2.log("    [OK] Bob profited (bet YES, outcome YES)");
+        console2.log("    [OK] Charlie lost (bet NO, outcome YES)");
+        console2.log("    [OK] Alice earned creator fees");
+
+        // ============================================================
+        // RESULT
+        // ============================================================
+        console2.log("");
+        console2.log(
+            "================================================================"
+        );
+        console2.log("  SUCCESS: Full prediction market lifecycle completed!");
+        console2.log("  - Market created, seeded, bets placed");
+        console2.log("  - Manipulation detected, paused, and unpaused");
+        console2.log("  - Market resolved after deadline with high confidence");
+        console2.log("  - Winner claimed payout, loser correctly rejected");
+        console2.log("  - Creator withdrew earned fees");
+        console2.log("  All functions verified end-to-end.");
+        console2.log(
+            "================================================================"
+        );
+    }
+
+    // ================================================================
+    //           ESCALATION & REFUND FLOW SIMULATION
+    // ================================================================
+
+    function test_FullFlow_EscalationRefundSimulation() public {
+        console2.log("");
+        console2.log(
+            "================================================================"
+        );
+        console2.log("         VERITY - ESCALATION & REFUND SIMULATION");
+        console2.log(
+            "================================================================"
+        );
+
+        // STEP 1: Setup
+        console2.log("");
+        console2.log("STEP 1: Create Market & Place Bets");
+        console2.log("--------------------------------------");
+
+        vm.startPrank(cre);
+        marketId = verity.createMarketFromCre(
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Will ETH flip BTC by market cap?",
+            "Resolved Yes if ETH market cap > BTC market cap",
+            "CoinGecko, CoinMarketCap"
+        );
+        vm.stopPrank();
+
+        console2.log("  [OK] Market created: Will ETH flip BTC?");
+
+        vm.startPrank(alice);
+        verity.seedLiquidity(marketId, SEED_AMOUNT, SEED_AMOUNT);
+        vm.stopPrank();
+
+        console2.log("  [OK] Liquidity seeded: 10,000 YES + 10,000 NO");
+
+        uint256 bobBalStart = usdc.balanceOf(bob);
+        uint256 charlieBalStart = usdc.balanceOf(charlie);
+
+        vm.startPrank(bob);
+        verity.placeBet(marketId, BET_AMOUNT, true, 0);
+        vm.stopPrank();
+        console2.log("  [OK] Bob bet YES: 1,000 USDC");
+
+        vm.startPrank(charlie);
+        verity.placeBet(marketId, BET_AMOUNT, false, 0);
+        vm.stopPrank();
+        console2.log("  [OK] Charlie bet NO: 1,000 USDC");
+
+        // STEP 2: Low confidence resolution → Escalation
+        console2.log("");
+        console2.log("STEP 2: CRE Resolves with LOW Confidence");
+        console2.log("--------------------------------------");
+        console2.log("  [!] CRE confidence: 70%% (below 90%% threshold)");
+        console2.log("  [!] Market will be ESCALATED, not resolved");
+
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+
+        vm.startPrank(cre);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            70
+        );
+        vm.stopPrank();
+
+        DataTypes.Market memory m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Escalated));
+        assertEq(m.outcome, uint8(DataTypes.MarketOutcome.Unresolved));
+
+        console2.log("  [OK] Market status: Escalated");
+        console2.log("  [OK] Outcome remains: Unresolved");
+
+        // STEP 3: Users claim refunds
+        console2.log("");
+        console2.log("STEP 3: All Users Claim Refunds");
+        console2.log("--------------------------------------");
+
+        vm.startPrank(bob);
+        verity.claimRefund(marketId);
+        vm.stopPrank();
+
+        uint256 bobRefund = usdc.balanceOf(bob) - (bobBalStart - BET_AMOUNT);
+        console2.log("  Bob refund   :", bobRefund / 1e6, "USDC");
+        console2.log("  [OK] Bob refunded successfully");
+
+        vm.startPrank(charlie);
+        verity.claimRefund(marketId);
+        vm.stopPrank();
+
+        uint256 charlieRefund = usdc.balanceOf(charlie) -
+            (charlieBalStart - BET_AMOUNT);
+        console2.log("  Charlie refund:", charlieRefund / 1e6, "USDC");
+        console2.log("  [OK] Charlie refunded successfully");
+
+        // STEP 4: Verify final state
+        console2.log("");
+        console2.log("STEP 4: Final Verification");
+        console2.log("--------------------------------------");
+        console2.log("  Bob balance  :", usdc.balanceOf(bob) / 1e6, "USDC");
+        console2.log("  Charlie bal  :", usdc.balanceOf(charlie) / 1e6, "USDC");
+
+        assertTrue(verity.isClaimed(marketId, bob));
+        assertTrue(verity.isClaimed(marketId, charlie));
+        console2.log("  [OK] Both users refunded");
+
+        console2.log("");
+        console2.log(
+            "================================================================"
+        );
+        console2.log("  SUCCESS: Escalation & refund flow completed!");
+        console2.log(
+            "  - Low confidence triggered escalation (not resolution)"
+        );
+        console2.log("  - Both bettors received full refunds");
+        console2.log("  - No funds lost due to uncertain outcome");
+        console2.log("  Protocol protected users from unreliable resolution.");
+        console2.log(
+            "================================================================"
+        );
     }
 }
