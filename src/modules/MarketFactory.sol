@@ -14,9 +14,9 @@ abstract contract MarketFactory is VerityStorage {
         uint64 deadline,
         uint16 feeBps,
         uint8 category,
-        string calldata question,
-        string calldata resolutionCriteria,
-        string calldata dataSources
+        string memory question,
+        string memory resolutionCriteria,
+        string memory dataSources
     ) internal returns (uint256 marketId) {
         if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();

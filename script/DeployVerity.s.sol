@@ -41,12 +41,7 @@ contract DeployVerity is Script {
         console2.log("PositionToken deployed at:", address(positionToken));
 
         // 3. Deploy Verity Core
-        Verity verity = new Verity(
-            usdc,
-            address(positionToken),
-            adminAddress,
-            creAddress
-        );
+        Verity verity = new Verity(usdc, address(positionToken), adminAddress, creAddress);
         console2.log("Verity Core deployed at:", address(verity));
 
         // 4. Link Verity ke PositionToken
