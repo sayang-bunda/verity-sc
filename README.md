@@ -11,7 +11,8 @@ Foundry consists of:
 
 ## Documentation
 
-https://book.getfoundry.sh/
+- [Foundry Book](https://book.getfoundry.sh/)
+- [Panduan Integrasi Oracle/Validator (Base Chain)](README_CRE.md)
 
 ## Usage
 
