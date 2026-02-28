@@ -39,4 +39,11 @@ library DataTypes {
         uint128 totalBetYes;
         uint128 totalBetNo;
     }
+
+    struct ResolutionMeta {
+        string resolutionCriteria;
+        string dataSources;
+        int256 targetValue;       // Chainlink 8-decimal format (0 if not CryptoPrice)
+        address priceFeedAddress; // zero address if not CryptoPrice
+    }
 }

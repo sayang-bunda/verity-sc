@@ -16,7 +16,9 @@ abstract contract MarketFactory is VerityStorage {
         uint8 category,
         string memory question,
         string memory resolutionCriteria,
-        string memory dataSources
+        string memory dataSources,
+        int256 targetValue,
+        address priceFeedAddress
     ) internal returns (uint256 marketId) {
         if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
@@ -34,6 +36,14 @@ abstract contract MarketFactory is VerityStorage {
         m.status = uint8(DataTypes.MarketStatus.Active);
         m.outcome = uint8(DataTypes.MarketOutcome.Unresolved);
         m.category = category;
+
+        marketQuestions[marketId] = question;
+
+        DataTypes.ResolutionMeta storage r = resolutionMeta[marketId];
+        r.resolutionCriteria = resolutionCriteria;
+        r.dataSources = dataSources;
+        r.targetValue = targetValue;
+        r.priceFeedAddress = priceFeedAddress;
 
         emit Events.MarketCreated(
             marketId, creator, category, deadline, feeBps, question, resolutionCriteria, dataSources

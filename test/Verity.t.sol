@@ -35,6 +35,10 @@ contract VerityTest is Test {
 
         posToken.setVerityContract(address(verity));
 
+        // Alice is an approved market creator (has ADMIN_ROLE)
+        vm.prank(admin);
+        verity.grantRole(keccak256("ADMIN_ROLE"), alice);
+
         usdc.mint(alice, INITIAL_MINT);
         usdc.mint(bob, INITIAL_MINT);
         usdc.mint(charlie, INITIAL_MINT);
@@ -58,7 +62,9 @@ contract VerityTest is Test {
             CATEGORY_CRYPTO,
             "Will BTC reach $100k by end of 2025?",
             "Resolved Yes if BTC price >= $100,000 USD on any major exchange",
-            "Chainlink BTC/USD, CoinGecko"
+            "Chainlink BTC/USD, CoinGecko",
+            0,
+            address(0)
         );
     }
 
@@ -104,7 +110,7 @@ contract VerityTest is Test {
         vm.prank(alice);
         vm.expectRevert(Errors.Unauthorized.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
         );
     }
 
@@ -112,7 +118,7 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.DeadlineAlreadyPassed.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
         );
     }
 
@@ -120,7 +126,7 @@ contract VerityTest is Test {
         vm.prank(cre);
         vm.expectRevert(Errors.InvalidFeeBps.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources"
+            alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
         );
     }
 
@@ -480,7 +486,9 @@ contract VerityTest is Test {
             CATEGORY_CRYPTO,
             "Will BTC reach $100k by end of 2025?",
             "Resolved Yes if BTC >= $100,000 on any major exchange",
-            "Chainlink BTC/USD, CoinGecko"
+            "Chainlink BTC/USD, CoinGecko",
+            int256(100_000 * 1e8), // $100,000 with 8 decimals (Chainlink format)
+            address(0)             // priceFeedAddress set on deploy
         );
         vm.stopPrank();
 
@@ -774,7 +782,9 @@ contract VerityTest is Test {
             CATEGORY_CRYPTO,
             "Will ETH flip BTC by market cap?",
             "Resolved Yes if ETH market cap > BTC market cap",
-            "CoinGecko, CoinMarketCap"
+            "CoinGecko, CoinMarketCap",
+            0,
+            address(0)
         );
         vm.stopPrank();
 

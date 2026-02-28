@@ -25,6 +25,8 @@ library Events {
     event MarketPaused(uint256 indexed marketId, uint8 score);
     event MarketUnpaused(uint256 indexed marketId);
 
+    event SettlementRequested(uint256 indexed marketId, address indexed requester);
+
     event PayoutClaimed(uint256 indexed marketId, address indexed user, uint256 amount);
     event RefundProcessed(uint256 indexed marketId, address indexed user, uint256 amount);
     event FeeWithdrawn(uint256 indexed marketId, address indexed creator, uint256 amount);

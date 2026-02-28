@@ -87,6 +87,12 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             pos.totalBetNo += _toU128(amount);
         }
 
+        // Track unique bettors
+        if (!hasBetted[marketId][msg.sender]) {
+            hasBetted[marketId][msg.sender] = true;
+            bettorCounts[marketId]++;
+        }
+
         IERC20(USDC).safeTransferFrom(msg.sender, address(this), amount);
 
         // Token ID: even = YES, odd = NO (inline to save external call gas)
@@ -94,6 +100,18 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         IPositionToken(POSITION_TOKEN).mint(msg.sender, tokenId, shares);
 
         emit Events.BetPlaced(marketId, msg.sender, isYes, amount, shares, feeAmount);
+    }
+
+    /// @notice Request settlement for a market after its deadline has passed.
+    ///         Emits SettlementRequested which triggers CRE Workflow 3.
+    function requestSettlement(uint256 marketId) external {
+        _requireMarketExists(marketId);
+        DataTypes.Market storage m = markets[marketId];
+
+        if (block.timestamp < m.deadline) revert Errors.DeadlineNotReached();
+        if (m.status == uint8(DataTypes.MarketStatus.Resolved)) revert Errors.MarketAlreadyResolved();
+
+        emit Events.SettlementRequested(marketId, msg.sender);
     }
 
     function claimPayout(uint256 marketId) external nonReentrant {

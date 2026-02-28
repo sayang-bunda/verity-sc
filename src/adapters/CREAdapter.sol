@@ -19,11 +19,10 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
     // ============ CRE DON Entry Point ============
     /// @notice Receives reports from CRE DON via writeReport
     /// @dev Decodes the payload and routes to the appropriate internal function
-    ///      Pattern: same as UpdateReservesProxy in CRE template
-    /// @param metadata CRE metadata (contains workflow info, first 32 bytes = workflowId)
-    /// @param report ABI-encoded payload: (uint8 action, ...action-specific data)
+    ///      Payload format: abi.encode(uint8 action, ...action-specific fields)
+    /// @param metadata CRE metadata (first 32 bytes = workflowId)
+    /// @param report   ABI-encoded payload starting with uint8 action
     function onReport(bytes calldata metadata, bytes calldata report) external onlyCre {
-        // Decode action type from the report (first field)
         uint8 action = abi.decode(report, (uint8));
 
         if (action == ACTION_CREATE_MARKET) {
@@ -36,7 +35,6 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
             revert Errors.InvalidOutcome();
         }
 
-        // Extract workflowId from metadata for logging
         bytes32 workflowId;
         if (metadata.length >= 32) {
             workflowId = bytes32(metadata[:32]);
@@ -46,28 +44,33 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
 
     // ============ Internal Report Handlers ============
 
-    /// @dev Handles ACTION_CREATE_MARKET (Workflow 1)
+    /// @dev ACTION_CREATE_MARKET (Workflow 1)
     ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
-    ///               uint8 category, string question, string criteria, string sources)
+    ///               uint8 category, string question, string criteria, string sources,
+    ///               int256 targetValue, address priceFeedAddress)
     function _handleCreateMarket(bytes calldata report) internal {
-        (, // skip action (already decoded)
+        (
+            , // action — already decoded
             address creator,
             uint64 deadline,
             uint16 feeBps,
             uint8 category,
             string memory question,
             string memory resolutionCriteria,
-            string memory dataSources
-        ) = abi.decode(report, (uint8, address, uint64, uint16, uint8, string, string, string));
+            string memory dataSources,
+            int256 targetValue,
+            address priceFeedAddress
+        ) = abi.decode(report, (uint8, address, uint64, uint16, uint8, string, string, string, int256, address));
 
         if (!hasRole(ADMIN_ROLE, creator)) revert Errors.Unauthorized();
-        _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources);
+        _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources, targetValue, priceFeedAddress);
     }
 
-    /// @dev Handles ACTION_REPORT_MANIPULATION (Workflow 2)
+    /// @dev ACTION_REPORT_MANIPULATION (Workflow 2)
     ///      Payload: (uint8 action, uint256 marketId, uint8 score, string reason)
     function _handleReportManipulation(bytes calldata report) internal {
-        (, // skip action
+        (
+            , // action
             uint256 marketId,
             uint8 score,
             string memory reason
@@ -77,10 +80,11 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
         _reportManipulation(marketId, score, reason);
     }
 
-    /// @dev Handles ACTION_RESOLVE_MARKET (Workflow 3)
+    /// @dev ACTION_RESOLVE_MARKET (Workflow 3)
     ///      Payload: (uint8 action, uint256 marketId, uint8 outcome, uint8 confidence)
     function _handleResolveMarket(bytes calldata report) internal {
-        (, // skip action
+        (
+            , // action
             uint256 marketId,
             uint8 outcome,
             uint8 confidence
@@ -93,7 +97,7 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
         _resolveMarket(marketId, outcome, confidence);
     }
 
-    // ============ Direct Call Functions (backward compatible, for testing) ============
+    // ============ Direct Call Functions (for testing / backward compat) ============
 
     function createMarketFromCre(
         address creator,
@@ -102,10 +106,12 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
         uint8 category,
         string calldata question,
         string calldata resolutionCriteria,
-        string calldata dataSources
+        string calldata dataSources,
+        int256 targetValue,
+        address priceFeedAddress
     ) external onlyCre returns (uint256 marketId) {
         if (!hasRole(ADMIN_ROLE, creator)) revert Errors.Unauthorized();
-        marketId = _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources);
+        marketId = _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources, targetValue, priceFeedAddress);
     }
 
     function reportManipulation(uint256 marketId, uint8 score, string calldata reason) external onlyCre {

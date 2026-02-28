@@ -15,6 +15,12 @@ abstract contract VerityStorage {
     mapping(uint256 => mapping(address => bool)) internal claimed;
     mapping(uint256 => uint256) internal accumulatedFees;
 
+    // ── Extended market data ──────────────────────────────────────────────────
+    mapping(uint256 => string) internal marketQuestions;
+    mapping(uint256 => DataTypes.ResolutionMeta) internal resolutionMeta;
+    mapping(uint256 => uint256) internal bettorCounts;
+    mapping(uint256 => mapping(address => bool)) internal hasBetted;
+
     constructor(address _usdc, address _positionToken) {
         if (_usdc == address(0)) revert Errors.ZeroAddress();
         if (_positionToken == address(0)) revert Errors.ZeroAddress();
@@ -27,6 +33,8 @@ abstract contract VerityStorage {
             revert Errors.MarketNotFound();
         }
     }
+
+    // ── Core market getters ───────────────────────────────────────────────────
 
     function getMarket(uint256 marketId) external view returns (DataTypes.Market memory) {
         return markets[marketId];
@@ -46,5 +54,24 @@ abstract contract VerityStorage {
 
     function getAccumulatedFees(uint256 marketId) external view returns (uint256) {
         return accumulatedFees[marketId];
+    }
+
+    // ── Extended getters (used by CRE workflows) ──────────────────────────────
+
+    function getMarketQuestion(uint256 marketId) external view returns (string memory) {
+        return marketQuestions[marketId];
+    }
+
+    function getBettorCount(uint256 marketId) external view returns (uint256) {
+        return bettorCounts[marketId];
+    }
+
+    function getResolutionData(uint256 marketId)
+        external
+        view
+        returns (string memory resolutionCriteria, string memory dataSources, int256 targetValue, address priceFeedAddress)
+    {
+        DataTypes.ResolutionMeta storage r = resolutionMeta[marketId];
+        return (r.resolutionCriteria, r.dataSources, r.targetValue, r.priceFeedAddress);
     }
 }
