@@ -14,10 +14,10 @@ library DataTypes {
         No
     }
     enum MarketCategory {
-        CryptoPrice,
-        Political,
-        Sports,
-        Other
+        CryptoPrice, // 0 — resolve via Chainlink Price Feed
+        Political, // 1 — resolve via official results / news
+        Sports, // 2 — resolve via official sports results
+        Other // 3 — resolve via news sources (incl. SOCIAL & EVENT)
     }
 
     struct Market {
