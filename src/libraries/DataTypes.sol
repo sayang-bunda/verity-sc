@@ -47,16 +47,13 @@ library DataTypes {
         address priceFeedAddress; // zero address if not CryptoPrice
     }
 
-    /// @notice Market pending admin review (risk score 31-70 from CRE Workflow 1)
-    struct PendingMarket {
+    /// @notice Records a high-risk market rejection on-chain (risk score 71-100)
+    /// @dev Written by CRE via ACTION_REJECT_MARKET — immutable audit trail
+    struct RejectedMarket {
         address creator;
-        uint64 deadline;
-        uint16 feeBps;
-        uint8 category;
         uint8 riskScore;
-        bool exists;
+        uint256 timestamp;
         string question;
-        string resolutionCriteria;
-        string dataSources;
+        string reason;
     }
 }

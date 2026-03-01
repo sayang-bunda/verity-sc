@@ -22,9 +22,9 @@ abstract contract VerityStorage {
     mapping(uint256 => uint256) internal bettorCounts;
     mapping(uint256 => mapping(address => bool)) internal hasBetted;
 
-    // ── Pending markets (risk score 31-70, awaiting admin review) ────────────
-    uint256 public pendingCount;
-    mapping(uint256 => DataTypes.PendingMarket) internal pendingMarkets;
+    // ── Rejected markets (risk score 71-100, recorded on-chain by CRE) ───────
+    uint256 public rejectedCount;
+    mapping(uint256 => DataTypes.RejectedMarket) internal rejectedMarkets;
 
     constructor(address _usdc, address _positionToken) {
         if (_usdc == address(0)) revert Errors.ZeroAddress();
@@ -102,5 +102,13 @@ abstract contract VerityStorage {
             r.targetValue,
             r.priceFeedAddress
         );
+    }
+
+    // ── Rejected market getter ─────────────────────────────────────────────────
+
+    function getRejectedMarket(
+        uint256 rejectedId
+    ) external view returns (DataTypes.RejectedMarket memory) {
+        return rejectedMarkets[rejectedId];
     }
 }

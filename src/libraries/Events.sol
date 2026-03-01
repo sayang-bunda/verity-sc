@@ -13,25 +13,12 @@ library Events {
         string dataSources
     );
 
-    /// @notice Emitted when CRE risk score is 31-70 — market awaits admin review
-    event MarketPending(
-        uint256 indexed pendingId,
+    /// @notice Emitted when CRE records a high-risk market rejection on-chain (risk 71-100)
+    event MarketRejected(
+        uint256 indexed rejectedId,
         address indexed creator,
         uint8 riskScore,
-        string question
-    );
-
-    /// @notice Emitted when admin approves a pending market
-    event MarketApproved(
-        uint256 indexed pendingId,
-        uint256 indexed marketId,
-        address indexed admin
-    );
-
-    /// @notice Emitted when admin rejects a pending market
-    event MarketRejected(
-        uint256 indexed pendingId,
-        address indexed admin,
+        string question,
         string reason
     );
 

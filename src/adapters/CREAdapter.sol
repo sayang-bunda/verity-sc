@@ -16,10 +16,17 @@ abstract contract CREAdapter is
     SettlementEngine
 {
     // ============ Action Types (CRE → Contract routing) ============
+    // ACTION 1: Low risk (0-30)   → auto create market
+    // ACTION 2: Workflow 2        → report manipulation
+    // ACTION 3: Workflow 3        → resolve market
+    // ACTION 5: High risk (71-100)→ record rejection on-chain (BFT attests refusal)
+    //
+    // Medium risk (31-70): CRE handles BFT consensus internally,
+    //                      if 21 nodes agree → still uses ACTION=1 to create market
     uint8 internal constant ACTION_CREATE_MARKET = 1;
     uint8 internal constant ACTION_REPORT_MANIPULATION = 2;
     uint8 internal constant ACTION_RESOLVE_MARKET = 3;
-    uint8 internal constant ACTION_QUEUE_PENDING_MARKET = 4;
+    uint8 internal constant ACTION_REJECT_MARKET = 5;
 
     // ============ Events ============
     event ReportReceived(uint8 indexed action, bytes32 workflowId);
@@ -38,12 +45,12 @@ abstract contract CREAdapter is
 
         if (action == ACTION_CREATE_MARKET) {
             _handleCreateMarket(report);
-        } else if (action == ACTION_QUEUE_PENDING_MARKET) {
-            _handleQueuePendingMarket(report);
         } else if (action == ACTION_REPORT_MANIPULATION) {
             _handleReportManipulation(report);
         } else if (action == ACTION_RESOLVE_MARKET) {
             _handleResolveMarket(report);
+        } else if (action == ACTION_REJECT_MARKET) {
+            _handleRejectMarket(report);
         } else {
             revert Errors.InvalidOutcome();
         }
@@ -57,7 +64,9 @@ abstract contract CREAdapter is
 
     // ============ Internal Report Handlers ============
 
-    /// @dev ACTION_CREATE_MARKET (Workflow 1 — risk score 0-30, auto approve)
+    /// @dev ACTION_CREATE_MARKET (Workflow 1)
+    ///      Used for LOW risk (0-30) direct approval AND
+    ///      MEDIUM risk (31-70) after BFT consensus of 21 nodes
     ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
     ///               uint8 category, string question, string criteria, string sources,
     ///               int256 targetValue, address priceFeedAddress)
@@ -90,6 +99,7 @@ abstract contract CREAdapter is
             );
 
         // No ADMIN check — any user can request market via CRE
+        // For medium risk, CRE has already achieved BFT consensus before calling this
         _createMarket(
             creator,
             deadline,
@@ -103,52 +113,37 @@ abstract contract CREAdapter is
         );
     }
 
-    /// @dev ACTION_QUEUE_PENDING_MARKET (Workflow 1 — risk score 31-70, pending admin review)
-    ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
-    ///               uint8 category, uint8 riskScore, string question, string criteria, string sources)
-    function _handleQueuePendingMarket(bytes calldata report) internal {
+    /// @dev ACTION_REJECT_MARKET (Workflow 1 — high risk 71-100)
+    ///      Records the rejection on-chain as an immutable audit trail.
+    ///      The BFT consensus of 21 nodes attests to the refusal.
+    ///      Payload: (uint8 action, address creator, uint8 riskScore, string question, string reason)
+    function _handleRejectMarket(bytes calldata report) internal {
         (
             , // action
             address creator,
-            uint64 deadline,
-            uint16 feeBps,
-            uint8 category,
             uint8 riskScore,
             string memory question,
-            string memory resolutionCriteria,
-            string memory dataSources
-        ) = abi.decode(
-                report,
-                (
-                    uint8,
-                    address,
-                    uint64,
-                    uint16,
-                    uint8,
-                    uint8,
-                    string,
-                    string,
-                    string
-                )
-            );
+            string memory reason
+        ) = abi.decode(report, (uint8, address, uint8, string, string));
 
         if (creator == address(0)) revert Errors.ZeroAddress();
-        if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
 
-        uint256 pendingId = pendingCount++;
+        uint256 rejectedId = rejectedCount++;
 
-        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
-        p.creator = creator;
-        p.deadline = deadline;
-        p.feeBps = feeBps;
-        p.category = category;
-        p.riskScore = riskScore;
-        p.question = question;
-        p.resolutionCriteria = resolutionCriteria;
-        p.dataSources = dataSources;
-        p.exists = true;
+        DataTypes.RejectedMarket storage r = rejectedMarkets[rejectedId];
+        r.creator = creator;
+        r.riskScore = riskScore;
+        r.timestamp = block.timestamp;
+        r.question = question;
+        r.reason = reason;
 
-        emit Events.MarketPending(pendingId, creator, riskScore, question);
+        emit Events.MarketRejected(
+            rejectedId,
+            creator,
+            riskScore,
+            question,
+            reason
+        );
     }
 
     /// @dev ACTION_REPORT_MANIPULATION (Workflow 2)
@@ -182,51 +177,6 @@ abstract contract CREAdapter is
         _resolveMarket(marketId, outcome, confidence);
     }
 
-    // ============ Admin: Review Pending Markets ============
-
-    /// @notice Admin approves a pending market — creates it on-chain
-    function approveMarket(uint256 pendingId) external onlyAdmin {
-        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
-        if (!p.exists) revert Errors.PendingMarketNotFound();
-
-        // Mark as handled before creating (re-entrancy safety)
-        p.exists = false;
-
-        uint256 marketId = _createMarket(
-            p.creator,
-            p.deadline,
-            p.feeBps,
-            p.category,
-            p.question,
-            p.resolutionCriteria,
-            p.dataSources,
-            0, // targetValue — not set for pending markets
-            address(0) // priceFeedAddress — not set for pending markets
-        );
-
-        emit Events.MarketApproved(pendingId, marketId, msg.sender);
-    }
-
-    /// @notice Admin rejects a pending market — no market created
-    function rejectMarket(
-        uint256 pendingId,
-        string calldata reason
-    ) external onlyAdmin {
-        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
-        if (!p.exists) revert Errors.PendingMarketNotFound();
-
-        p.exists = false;
-
-        emit Events.MarketRejected(pendingId, msg.sender, reason);
-    }
-
-    /// @notice Get details of a pending market
-    function getPendingMarket(
-        uint256 pendingId
-    ) external view returns (DataTypes.PendingMarket memory) {
-        return pendingMarkets[pendingId];
-    }
-
     // ============ Direct Call Functions (for testing / backward compat) ============
 
     function createMarketFromCre(
@@ -240,7 +190,6 @@ abstract contract CREAdapter is
         int256 targetValue,
         address priceFeedAddress
     ) external onlyCre returns (uint256 marketId) {
-        // No ADMIN check — any user can request market via CRE
         marketId = _createMarket(
             creator,
             deadline,

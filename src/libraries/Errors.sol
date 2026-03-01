@@ -16,7 +16,6 @@ library Errors {
     error MarketNotResolved();
     error MarketNotEscalated();
     error MarketNotFound();
-    error PendingMarketNotFound();
     error InvalidMarketId();
     error InvalidCategory();
     error VerityContractAlreadySet();
