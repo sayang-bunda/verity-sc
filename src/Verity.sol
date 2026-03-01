@@ -39,6 +39,18 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         keccak256(
             "ClaimPayout(uint256 marketId,address relayer,uint256 relayerFee,uint256 nonce,uint256 deadline)"
         );
+    bytes32 private constant SEED_LIQUIDITY_TYPEHASH =
+        keccak256(
+            "SeedLiquidity(uint256 marketId,address relayer,uint128 amountYes,uint128 amountNo,uint256 relayerFee,uint256 nonce,uint256 deadline)"
+        );
+    bytes32 private constant REQUEST_SETTLEMENT_TYPEHASH =
+        keccak256(
+            "RequestSettlement(uint256 marketId,address relayer,uint256 nonce,uint256 deadline)"
+        );
+    bytes32 private constant WITHDRAW_FEES_TYPEHASH =
+        keccak256(
+            "WithdrawFees(uint256 marketId,address relayer,uint256 relayerFee,uint256 nonce,uint256 deadline)"
+        );
 
     bytes32 public immutable DOMAIN_SEPARATOR;
 
@@ -108,6 +120,59 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         );
 
         emit Events.LiquiditySeeded(marketId, msg.sender, m.poolYes, m.poolNo);
+    }
+
+    /// @notice Gasless seed liquidity via meta-transaction
+    function seedLiquidityWithSignature(
+        uint256 marketId,
+        uint128 amountYes,
+        uint128 amountNo,
+        uint256 relayerFee,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyRelayer nonReentrant {
+        if (block.timestamp > deadline) revert Errors.DeadlineAlreadyPassed();
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                SEED_LIQUIDITY_TYPEHASH,
+                marketId,
+                msg.sender,
+                amountYes,
+                amountNo,
+                relayerFee,
+                nonces[tx.origin]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
+        address user = ecrecover(hash, v, r, s);
+        if (user == address(0)) revert Errors.InvalidAddress();
+
+        _requireMarketExists(marketId);
+        DataTypes.Market storage m = markets[marketId];
+
+        if (m.creator != user) revert Errors.Unauthorized();
+        if (m.status != uint8(DataTypes.MarketStatus.Active)) revert Errors.MarketNotActive();
+        if (seeded[marketId]) revert Errors.AlreadySeeded();
+
+        CPMMMath.validateInitialPools(amountYes, amountNo);
+
+        seeded[marketId] = true;
+        m.poolYes = amountYes;
+        m.poolNo = amountNo;
+
+        uint256 total = uint256(amountYes) + uint256(amountNo);
+        IERC20(USDC).safeTransferFrom(user, address(this), total + relayerFee);
+        if (relayerFee > 0) {
+            IERC20(USDC).safeTransfer(msg.sender, relayerFee);
+        }
+
+        emit Events.LiquiditySeeded(marketId, user, m.poolYes, m.poolNo);
     }
 
     function placeBet(
@@ -245,6 +310,41 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             revert Errors.MarketAlreadyResolved();
 
         emit Events.SettlementRequested(marketId, msg.sender);
+    }
+
+    /// @notice Gasless request settlement via meta-transaction
+    function requestSettlementWithSignature(
+        uint256 marketId,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyRelayer {
+        if (block.timestamp > deadline) revert Errors.DeadlineAlreadyPassed();
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                REQUEST_SETTLEMENT_TYPEHASH,
+                marketId,
+                msg.sender,
+                nonces[tx.origin]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
+        address user = ecrecover(hash, v, r, s);
+        if (user == address(0)) revert Errors.InvalidAddress();
+
+        _requireMarketExists(marketId);
+        DataTypes.Market storage m = markets[marketId];
+
+        if (block.timestamp < m.deadline) revert Errors.DeadlineNotReached();
+        if (m.status == uint8(DataTypes.MarketStatus.Resolved))
+            revert Errors.MarketAlreadyResolved();
+
+        emit Events.SettlementRequested(marketId, user);
     }
 
     function claimPayout(uint256 marketId) external nonReentrant {
@@ -401,5 +501,51 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         IERC20(USDC).safeTransfer(msg.sender, fees);
 
         emit Events.FeeWithdrawn(marketId, msg.sender, fees);
+    }
+
+    /// @notice Gasless withdraw fees via meta-transaction
+    function withdrawFeesWithSignature(
+        uint256 marketId,
+        uint256 relayerFee,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyRelayer nonReentrant {
+        if (block.timestamp > deadline) revert Errors.DeadlineAlreadyPassed();
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                WITHDRAW_FEES_TYPEHASH,
+                marketId,
+                msg.sender,
+                relayerFee,
+                nonces[tx.origin]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
+        address user = ecrecover(hash, v, r, s);
+        if (user == address(0)) revert Errors.InvalidAddress();
+
+        _requireMarketExists(marketId);
+        DataTypes.Market storage m = markets[marketId];
+
+        if (m.creator != user) revert Errors.Unauthorized();
+        if (m.status != uint8(DataTypes.MarketStatus.Resolved)) revert Errors.MarketNotResolved();
+
+        uint256 fees = accumulatedFees[marketId];
+        if (fees == 0) revert Errors.NothingToClaim();
+        if (fees <= relayerFee) revert Errors.InsufficientLiquidity();
+
+        accumulatedFees[marketId] = 0;
+        IERC20(USDC).safeTransfer(user, fees - relayerFee);
+        if (relayerFee > 0) {
+            IERC20(USDC).safeTransfer(msg.sender, relayerFee);
+        }
+
+        emit Events.FeeWithdrawn(marketId, user, fees);
     }
 }

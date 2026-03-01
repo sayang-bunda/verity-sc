@@ -2,9 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract MockUSDC is ERC20, Ownable {
+contract MockUSDC is ERC20Permit, Ownable {
     // ============ Custom Errors ============
     error InvalidAddress();
     error AmountTooHigh();
@@ -26,7 +27,7 @@ contract MockUSDC is ERC20, Ownable {
     event Faucet(address indexed recipient, uint256 amount);
     event CooldownUpdated(uint256 newCooldown);
 
-    constructor(uint256 initialSupply) ERC20("Mock USD Coin", "USDC") Ownable(msg.sender) {
+    constructor(uint256 initialSupply) ERC20("Mock USD Coin", "USDC") ERC20Permit("Mock USD Coin") Ownable(msg.sender) {
         if (initialSupply > 0) {
             _mint(msg.sender, initialSupply);
         }
