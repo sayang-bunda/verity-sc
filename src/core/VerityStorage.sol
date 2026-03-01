@@ -26,6 +26,9 @@ abstract contract VerityStorage {
     uint256 public rejectedCount;
     mapping(uint256 => DataTypes.RejectedMarket) internal rejectedMarkets;
 
+    // ── Meta-transactions (Relayer support) ──────────────────────────────────
+    mapping(address => uint256) public nonces;
+
     constructor(address _usdc, address _positionToken) {
         if (_usdc == address(0)) revert Errors.ZeroAddress();
         if (_positionToken == address(0)) revert Errors.ZeroAddress();

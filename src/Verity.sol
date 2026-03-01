@@ -2,8 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {
+    SafeERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {
+    ReentrancyGuard
+} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {DataTypes} from "./libraries/DataTypes.sol";
 import {Errors} from "./libraries/Errors.sol";
@@ -22,6 +26,22 @@ interface IPositionToken {
 contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     using SafeERC20 for IERC20;
 
+    // ============ EIP-712 Types ============
+    bytes32 private constant DOMAIN_TYPEHASH =
+        keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
+    bytes32 private constant PLACE_BET_TYPEHASH =
+        keccak256(
+            "PlaceBet(uint256 marketId,address relayer,uint256 amount,bool isYes,uint256 minShares,uint256 relayerFee,uint256 nonce,uint256 deadline)"
+        );
+    bytes32 private constant CLAIM_PAYOUT_TYPEHASH =
+        keccak256(
+            "ClaimPayout(uint256 marketId,address relayer,uint256 relayerFee,uint256 nonce,uint256 deadline)"
+        );
+
+    bytes32 public immutable DOMAIN_SEPARATOR;
+
     function _toU128(uint256 value) internal pure returns (uint128) {
         if (value > type(uint128).max) revert Errors.AmountTooHigh();
         // casting to 'uint128' is safe because we check overflow above
@@ -29,13 +49,43 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         return uint128(value);
     }
 
-    constructor(address _usdc, address _positionToken, address _admin, address _cre)
-        VerityStorage(_usdc, _positionToken)
-    {
+    constructor(
+        address _usdc,
+        address _positionToken,
+        address _admin,
+        address _cre
+    ) VerityStorage(_usdc, _positionToken) {
         _setupRoles(_admin, _cre);
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes("Verity")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
-    function seedLiquidity(uint256 marketId, uint128 amountYes, uint128 amountNo) external nonReentrant {
+    // ============ Meta-Transaction Helpers ============
+
+    function _getVRS(
+        bytes memory signature
+    ) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
+        if (signature.length != 65) revert Errors.InvalidAddress();
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+    }
+
+    function seedLiquidity(
+        uint256 marketId,
+        uint128 amountYes,
+        uint128 amountNo
+    ) external nonReentrant {
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
@@ -51,12 +101,85 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         m.poolYes = amountYes;
         m.poolNo = amountNo;
 
-        IERC20(USDC).safeTransferFrom(msg.sender, address(this), uint256(amountYes) + uint256(amountNo));
+        IERC20(USDC).safeTransferFrom(
+            msg.sender,
+            address(this),
+            uint256(amountYes) + uint256(amountNo)
+        );
 
         emit Events.LiquiditySeeded(marketId, msg.sender, m.poolYes, m.poolNo);
     }
 
-    function placeBet(uint256 marketId, uint256 amount, bool isYes, uint256 minShares) external nonReentrant {
+    function placeBet(
+        uint256 marketId,
+        uint256 amount,
+        bool isYes,
+        uint256 minShares
+    ) external nonReentrant {
+        _placeBet(
+            marketId,
+            msg.sender,
+            amount,
+            isYes,
+            minShares,
+            0,
+            address(0)
+        );
+    }
+
+    /// @notice Gasless betting via meta-transaction
+    function placeBetWithSignature(
+        uint256 marketId,
+        uint256 amount,
+        bool isYes,
+        uint256 minShares,
+        uint256 relayerFee,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyRelayer nonReentrant {
+        if (block.timestamp > deadline) revert Errors.DeadlineAlreadyPassed();
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                PLACE_BET_TYPEHASH,
+                marketId,
+                msg.sender, // Only the caller can be the designated relayer
+                amount,
+                isYes,
+                minShares,
+                relayerFee,
+                nonces[tx.origin]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
+        address user = ecrecover(hash, v, r, s);
+        if (user == address(0)) revert Errors.InvalidAddress();
+
+        _placeBet(
+            marketId,
+            user,
+            amount,
+            isYes,
+            minShares,
+            relayerFee,
+            msg.sender
+        );
+    }
+
+    function _placeBet(
+        uint256 marketId,
+        address user,
+        uint256 amount,
+        bool isYes,
+        uint256 minShares,
+        uint256 relayerFee,
+        address relayer
+    ) internal {
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
@@ -68,8 +191,12 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             revert Errors.DeadlineAlreadyPassed();
         }
 
-        (uint256 shares, uint256 feeAmount, uint256 newPoolYes, uint256 newPoolNo) =
-            _calculateBet(amount, m.poolYes, m.poolNo, m.feeBps, isYes);
+        (
+            uint256 shares,
+            uint256 feeAmount,
+            uint256 newPoolYes,
+            uint256 newPoolNo
+        ) = _calculateBet(amount, m.poolYes, m.poolNo, m.feeBps, isYes);
 
         if (shares < minShares) revert Errors.SlippageExceeded();
 
@@ -78,7 +205,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         m.totalVolume += amount;
         accumulatedFees[marketId] += feeAmount;
 
-        DataTypes.UserPosition storage pos = positions[marketId][msg.sender];
+        DataTypes.UserPosition storage pos = positions[marketId][user];
         if (isYes) {
             pos.yesShares += _toU128(shares);
             pos.totalBetYes += _toU128(amount);
@@ -88,18 +215,23 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         }
 
         // Track unique bettors
-        if (!hasBetted[marketId][msg.sender]) {
-            hasBetted[marketId][msg.sender] = true;
+        if (!hasBetted[marketId][user]) {
+            hasBetted[marketId][user] = true;
             bettorCounts[marketId]++;
         }
 
-        IERC20(USDC).safeTransferFrom(msg.sender, address(this), amount);
+        // Pull amount + relayer fee (relayerFee is 0 if calling directly)
+        IERC20(USDC).safeTransferFrom(user, address(this), amount + relayerFee);
 
-        // Token ID: even = YES, odd = NO (inline to save external call gas)
+        // Distribute relayer fee if applicable
+        if (relayerFee > 0 && relayer != address(0)) {
+            IERC20(USDC).safeTransfer(relayer, relayerFee);
+        }
+
         uint256 tokenId = isYes ? marketId * 2 : marketId * 2 + 1;
-        IPositionToken(POSITION_TOKEN).mint(msg.sender, tokenId, shares);
+        IPositionToken(POSITION_TOKEN).mint(user, tokenId, shares);
 
-        emit Events.BetPlaced(marketId, msg.sender, isYes, amount, shares, feeAmount);
+        emit Events.BetPlaced(marketId, user, isYes, amount, shares, feeAmount);
     }
 
     /// @notice Request settlement for a market after its deadline has passed.
@@ -109,37 +241,115 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         DataTypes.Market storage m = markets[marketId];
 
         if (block.timestamp < m.deadline) revert Errors.DeadlineNotReached();
-        if (m.status == uint8(DataTypes.MarketStatus.Resolved)) revert Errors.MarketAlreadyResolved();
+        if (m.status == uint8(DataTypes.MarketStatus.Resolved))
+            revert Errors.MarketAlreadyResolved();
 
         emit Events.SettlementRequested(marketId, msg.sender);
     }
 
     function claimPayout(uint256 marketId) external nonReentrant {
+        _claimPayout(marketId, msg.sender, 0, address(0));
+    }
+
+    /// @notice Gasless payout via meta-transaction
+    function claimPayoutWithSignature(
+        uint256 marketId,
+        uint256 relayerFee,
+        uint256 deadline,
+        bytes calldata signature
+    ) external onlyRelayer nonReentrant {
+        if (block.timestamp > deadline) revert Errors.DeadlineAlreadyPassed();
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                CLAIM_PAYOUT_TYPEHASH,
+                marketId,
+                msg.sender,
+                relayerFee,
+                nonces[tx.origin]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
+        address user = ecrecover(hash, v, r, s);
+        if (user == address(0)) revert Errors.InvalidAddress();
+
+        _claimPayout(marketId, user, relayerFee, msg.sender);
+    }
+
+    /// @notice Allows CRE to claim payout on behalf of a user, with a gas reward.
+    function claimPayoutFromCre(
+        uint256 marketId,
+        address user,
+        uint256 gasReward
+    ) external onlyCre nonReentrant {
+        _claimPayout(marketId, user, gasReward, msg.sender);
+    }
+
+    /// @dev Implementation of abstract CREAdapter function.
+    function _claimPayoutByRelayer(
+        uint256 marketId,
+        address user,
+        uint256 gasReward
+    ) internal override {
+        _claimPayout(marketId, user, gasReward, msg.sender);
+    }
+
+    function _claimPayout(
+        uint256 marketId,
+        address user,
+        uint256 gasReward,
+        address relayer
+    ) internal {
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.status != uint8(DataTypes.MarketStatus.Resolved)) {
             revert Errors.MarketNotResolved();
         }
-        if (claimed[marketId][msg.sender]) revert Errors.AlreadyClaimed();
+        if (claimed[marketId][user]) revert Errors.AlreadyClaimed();
 
-        DataTypes.UserPosition storage pos = positions[marketId][msg.sender];
+        DataTypes.UserPosition storage pos = positions[marketId][user];
 
-        uint256 payout = _calculatePayout(pos.yesShares, pos.noShares, m.poolYes, m.poolNo, m.outcome);
-        if (payout == 0) revert Errors.NothingToClaim();
+        uint256 totalPayout = _calculatePayout(
+            pos.yesShares,
+            pos.noShares,
+            m.poolYes,
+            m.poolNo,
+            m.outcome
+        );
+        if (totalPayout == 0) revert Errors.NothingToClaim();
+        if (totalPayout <= gasReward) revert Errors.InsufficientLiquidity();
 
-        claimed[marketId][msg.sender] = true;
+        claimed[marketId][user] = true;
 
         bool isYesWin = m.outcome == uint8(DataTypes.MarketOutcome.Yes);
         uint256 tokenId = isYesWin ? marketId * 2 : marketId * 2 + 1;
         uint256 shares = isYesWin ? pos.yesShares : pos.noShares;
 
         if (shares > 0) {
-            IPositionToken(POSITION_TOKEN).burn(msg.sender, tokenId, shares);
+            IPositionToken(POSITION_TOKEN).burn(user, tokenId, shares);
         }
 
-        IERC20(USDC).safeTransfer(msg.sender, payout);
-        emit Events.PayoutClaimed(marketId, msg.sender, payout);
+        if (gasReward > 0) {
+            uint256 userAmount = totalPayout - gasReward;
+            IERC20(USDC).safeTransfer(user, userAmount);
+            IERC20(USDC).safeTransfer(relayer, gasReward);
+            emit Events.PayoutClaimedByRelayer(
+                marketId,
+                user,
+                relayer,
+                totalPayout,
+                gasReward
+            );
+        } else {
+            IERC20(USDC).safeTransfer(user, totalPayout);
+            emit Events.PayoutClaimed(marketId, user, totalPayout);
+        }
     }
 
     function claimRefund(uint256 marketId) external nonReentrant {
@@ -157,10 +367,18 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         claimed[marketId][msg.sender] = true;
 
         if (pos.yesShares > 0) {
-            IPositionToken(POSITION_TOKEN).burn(msg.sender, marketId * 2, pos.yesShares);
+            IPositionToken(POSITION_TOKEN).burn(
+                msg.sender,
+                marketId * 2,
+                pos.yesShares
+            );
         }
         if (pos.noShares > 0) {
-            IPositionToken(POSITION_TOKEN).burn(msg.sender, marketId * 2 + 1, pos.noShares);
+            IPositionToken(POSITION_TOKEN).burn(
+                msg.sender,
+                marketId * 2 + 1,
+                pos.noShares
+            );
         }
 
         IERC20(USDC).safeTransfer(msg.sender, refund);

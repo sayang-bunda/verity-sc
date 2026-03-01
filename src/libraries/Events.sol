@@ -62,6 +62,13 @@ library Events {
         address indexed user,
         uint256 amount
     );
+    event PayoutClaimedByRelayer(
+        uint256 indexed marketId,
+        address indexed user,
+        address indexed relayer,
+        uint256 amount,
+        uint256 gasReward
+    );
     event RefundProcessed(
         uint256 indexed marketId,
         address indexed user,

@@ -7,6 +7,7 @@ import {Errors} from "../libraries/Errors.sol";
 abstract contract AccessManager is AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant CRE_ROLE = keccak256("CRE_ROLE");
+    bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
 
     modifier onlyAdmin() {
         _checkAdmin();
@@ -15,6 +16,16 @@ abstract contract AccessManager is AccessControl {
 
     modifier onlyCre() {
         _checkCre();
+        _;
+    }
+
+    modifier onlyRelayer() {
+        if (
+            !hasRole(RELAYER_ROLE, msg.sender) &&
+            !hasRole(ADMIN_ROLE, msg.sender)
+        ) {
+            revert Errors.Unauthorized();
+        }
         _;
     }
 
@@ -34,5 +45,6 @@ abstract contract AccessManager is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
         _grantRole(CRE_ROLE, cre);
+        _grantRole(RELAYER_ROLE, admin);
     }
 }

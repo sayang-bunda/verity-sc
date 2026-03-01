@@ -27,6 +27,7 @@ abstract contract CREAdapter is
     uint8 internal constant ACTION_REPORT_MANIPULATION = 2;
     uint8 internal constant ACTION_RESOLVE_MARKET = 3;
     uint8 internal constant ACTION_REJECT_MARKET = 5;
+    uint8 internal constant ACTION_CLAIM_PAYOUT = 6;
 
     // ============ Events ============
     event ReportReceived(uint8 indexed action, bytes32 workflowId);
@@ -51,6 +52,8 @@ abstract contract CREAdapter is
             _handleResolveMarket(report);
         } else if (action == ACTION_REJECT_MARKET) {
             _handleRejectMarket(report);
+        } else if (action == ACTION_CLAIM_PAYOUT) {
+            _handleClaimPayout(report);
         } else {
             revert Errors.InvalidOutcome();
         }
@@ -176,6 +179,27 @@ abstract contract CREAdapter is
         }
         _resolveMarket(marketId, outcome, confidence);
     }
+
+    /// @dev ACTION_CLAIM_PAYOUT (Workflow 3 — Relayer)
+    ///      Allows CRE to claim payout on behalf of a user, with a gas reward.
+    ///      Payload: (uint8 action, uint256 marketId, address user, uint256 gasReward)
+    function _handleClaimPayout(bytes calldata report) internal {
+        (
+            , // action
+            uint256 marketId,
+            address user,
+            uint256 gasReward
+        ) = abi.decode(report, (uint8, uint256, address, uint256));
+
+        _claimPayoutByRelayer(marketId, user, gasReward);
+    }
+
+    /// @dev To be overridden by parent (Verity.sol)
+    function _claimPayoutByRelayer(
+        uint256 marketId,
+        address user,
+        uint256 gasReward
+    ) internal virtual;
 
     // ============ Direct Call Functions (for testing / backward compat) ============
 
