@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {DataTypes} from "../libraries/DataTypes.sol";
+import {Events} from "../libraries/Events.sol";
 import {Errors} from "../libraries/Errors.sol";
 import {AccessManager} from "../security/AccessManager.sol";
 import {MarketFactory} from "../modules/MarketFactory.sol";
 import {RiskEngine} from "../modules/RiskEngine.sol";
 import {SettlementEngine} from "../modules/SettlementEngine.sol";
 
-abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, SettlementEngine {
+abstract contract CREAdapter is
+    AccessManager,
+    MarketFactory,
+    RiskEngine,
+    SettlementEngine
+{
     // ============ Action Types (CRE → Contract routing) ============
     uint8 internal constant ACTION_CREATE_MARKET = 1;
     uint8 internal constant ACTION_REPORT_MANIPULATION = 2;
     uint8 internal constant ACTION_RESOLVE_MARKET = 3;
+    uint8 internal constant ACTION_QUEUE_PENDING_MARKET = 4;
 
     // ============ Events ============
     event ReportReceived(uint8 indexed action, bytes32 workflowId);
@@ -22,11 +30,16 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
     ///      Payload format: abi.encode(uint8 action, ...action-specific fields)
     /// @param metadata CRE metadata (first 32 bytes = workflowId)
     /// @param report   ABI-encoded payload starting with uint8 action
-    function onReport(bytes calldata metadata, bytes calldata report) external onlyCre {
+    function onReport(
+        bytes calldata metadata,
+        bytes calldata report
+    ) external onlyCre {
         uint8 action = abi.decode(report, (uint8));
 
         if (action == ACTION_CREATE_MARKET) {
             _handleCreateMarket(report);
+        } else if (action == ACTION_QUEUE_PENDING_MARKET) {
+            _handleQueuePendingMarket(report);
         } else if (action == ACTION_REPORT_MANIPULATION) {
             _handleReportManipulation(report);
         } else if (action == ACTION_RESOLVE_MARKET) {
@@ -44,7 +57,7 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
 
     // ============ Internal Report Handlers ============
 
-    /// @dev ACTION_CREATE_MARKET (Workflow 1)
+    /// @dev ACTION_CREATE_MARKET (Workflow 1 — risk score 0-30, auto approve)
     ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
     ///               uint8 category, string question, string criteria, string sources,
     ///               int256 targetValue, address priceFeedAddress)
@@ -60,10 +73,82 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
             string memory dataSources,
             int256 targetValue,
             address priceFeedAddress
-        ) = abi.decode(report, (uint8, address, uint64, uint16, uint8, string, string, string, int256, address));
+        ) = abi.decode(
+                report,
+                (
+                    uint8,
+                    address,
+                    uint64,
+                    uint16,
+                    uint8,
+                    string,
+                    string,
+                    string,
+                    int256,
+                    address
+                )
+            );
 
-        if (!hasRole(ADMIN_ROLE, creator)) revert Errors.Unauthorized();
-        _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources, targetValue, priceFeedAddress);
+        // No ADMIN check — any user can request market via CRE
+        _createMarket(
+            creator,
+            deadline,
+            feeBps,
+            category,
+            question,
+            resolutionCriteria,
+            dataSources,
+            targetValue,
+            priceFeedAddress
+        );
+    }
+
+    /// @dev ACTION_QUEUE_PENDING_MARKET (Workflow 1 — risk score 31-70, pending admin review)
+    ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
+    ///               uint8 category, uint8 riskScore, string question, string criteria, string sources)
+    function _handleQueuePendingMarket(bytes calldata report) internal {
+        (
+            , // action
+            address creator,
+            uint64 deadline,
+            uint16 feeBps,
+            uint8 category,
+            uint8 riskScore,
+            string memory question,
+            string memory resolutionCriteria,
+            string memory dataSources
+        ) = abi.decode(
+                report,
+                (
+                    uint8,
+                    address,
+                    uint64,
+                    uint16,
+                    uint8,
+                    uint8,
+                    string,
+                    string,
+                    string
+                )
+            );
+
+        if (creator == address(0)) revert Errors.ZeroAddress();
+        if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
+
+        uint256 pendingId = pendingCount++;
+
+        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
+        p.creator = creator;
+        p.deadline = deadline;
+        p.feeBps = feeBps;
+        p.category = category;
+        p.riskScore = riskScore;
+        p.question = question;
+        p.resolutionCriteria = resolutionCriteria;
+        p.dataSources = dataSources;
+        p.exists = true;
+
+        emit Events.MarketPending(pendingId, creator, riskScore, question);
     }
 
     /// @dev ACTION_REPORT_MANIPULATION (Workflow 2)
@@ -97,6 +182,51 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
         _resolveMarket(marketId, outcome, confidence);
     }
 
+    // ============ Admin: Review Pending Markets ============
+
+    /// @notice Admin approves a pending market — creates it on-chain
+    function approveMarket(uint256 pendingId) external onlyAdmin {
+        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
+        if (!p.exists) revert Errors.PendingMarketNotFound();
+
+        // Mark as handled before creating (re-entrancy safety)
+        p.exists = false;
+
+        uint256 marketId = _createMarket(
+            p.creator,
+            p.deadline,
+            p.feeBps,
+            p.category,
+            p.question,
+            p.resolutionCriteria,
+            p.dataSources,
+            0, // targetValue — not set for pending markets
+            address(0) // priceFeedAddress — not set for pending markets
+        );
+
+        emit Events.MarketApproved(pendingId, marketId, msg.sender);
+    }
+
+    /// @notice Admin rejects a pending market — no market created
+    function rejectMarket(
+        uint256 pendingId,
+        string calldata reason
+    ) external onlyAdmin {
+        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
+        if (!p.exists) revert Errors.PendingMarketNotFound();
+
+        p.exists = false;
+
+        emit Events.MarketRejected(pendingId, msg.sender, reason);
+    }
+
+    /// @notice Get details of a pending market
+    function getPendingMarket(
+        uint256 pendingId
+    ) external view returns (DataTypes.PendingMarket memory) {
+        return pendingMarkets[pendingId];
+    }
+
     // ============ Direct Call Functions (for testing / backward compat) ============
 
     function createMarketFromCre(
@@ -110,16 +240,34 @@ abstract contract CREAdapter is AccessManager, MarketFactory, RiskEngine, Settle
         int256 targetValue,
         address priceFeedAddress
     ) external onlyCre returns (uint256 marketId) {
-        if (!hasRole(ADMIN_ROLE, creator)) revert Errors.Unauthorized();
-        marketId = _createMarket(creator, deadline, feeBps, category, question, resolutionCriteria, dataSources, targetValue, priceFeedAddress);
+        // No ADMIN check — any user can request market via CRE
+        marketId = _createMarket(
+            creator,
+            deadline,
+            feeBps,
+            category,
+            question,
+            resolutionCriteria,
+            dataSources,
+            targetValue,
+            priceFeedAddress
+        );
     }
 
-    function reportManipulation(uint256 marketId, uint8 score, string calldata reason) external onlyCre {
+    function reportManipulation(
+        uint256 marketId,
+        uint8 score,
+        string calldata reason
+    ) external onlyCre {
         _requireMarketExists(marketId);
         _reportManipulation(marketId, score, reason);
     }
 
-    function resolveMarketFromCre(uint256 marketId, uint8 outcome, uint8 confidence) external onlyCre {
+    function resolveMarketFromCre(
+        uint256 marketId,
+        uint8 outcome,
+        uint8 confidence
+    ) external onlyCre {
         _requireMarketExists(marketId);
         if (block.timestamp < markets[marketId].deadline) {
             revert Errors.DeadlineNotReached();

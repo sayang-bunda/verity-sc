@@ -43,7 +43,20 @@ library DataTypes {
     struct ResolutionMeta {
         string resolutionCriteria;
         string dataSources;
-        int256 targetValue;       // Chainlink 8-decimal format (0 if not CryptoPrice)
+        int256 targetValue; // Chainlink 8-decimal format (0 if not CryptoPrice)
         address priceFeedAddress; // zero address if not CryptoPrice
+    }
+
+    /// @notice Market pending admin review (risk score 31-70 from CRE Workflow 1)
+    struct PendingMarket {
+        address creator;
+        uint64 deadline;
+        uint16 feeBps;
+        uint8 category;
+        uint8 riskScore;
+        bool exists;
+        string question;
+        string resolutionCriteria;
+        string dataSources;
     }
 }

@@ -10,7 +10,8 @@ abstract contract VerityStorage {
     uint256 public marketCount;
 
     mapping(uint256 => DataTypes.Market) internal markets;
-    mapping(uint256 => mapping(address => DataTypes.UserPosition)) internal positions;
+    mapping(uint256 => mapping(address => DataTypes.UserPosition))
+        internal positions;
     mapping(uint256 => bool) internal seeded;
     mapping(uint256 => mapping(address => bool)) internal claimed;
     mapping(uint256 => uint256) internal accumulatedFees;
@@ -20,6 +21,10 @@ abstract contract VerityStorage {
     mapping(uint256 => DataTypes.ResolutionMeta) internal resolutionMeta;
     mapping(uint256 => uint256) internal bettorCounts;
     mapping(uint256 => mapping(address => bool)) internal hasBetted;
+
+    // ── Pending markets (risk score 31-70, awaiting admin review) ────────────
+    uint256 public pendingCount;
+    mapping(uint256 => DataTypes.PendingMarket) internal pendingMarkets;
 
     constructor(address _usdc, address _positionToken) {
         if (_usdc == address(0)) revert Errors.ZeroAddress();
@@ -36,11 +41,16 @@ abstract contract VerityStorage {
 
     // ── Core market getters ───────────────────────────────────────────────────
 
-    function getMarket(uint256 marketId) external view returns (DataTypes.Market memory) {
+    function getMarket(
+        uint256 marketId
+    ) external view returns (DataTypes.Market memory) {
         return markets[marketId];
     }
 
-    function getPosition(uint256 marketId, address user) external view returns (DataTypes.UserPosition memory) {
+    function getPosition(
+        uint256 marketId,
+        address user
+    ) external view returns (DataTypes.UserPosition memory) {
         return positions[marketId][user];
     }
 
@@ -48,17 +58,24 @@ abstract contract VerityStorage {
         return seeded[marketId];
     }
 
-    function isClaimed(uint256 marketId, address user) external view returns (bool) {
+    function isClaimed(
+        uint256 marketId,
+        address user
+    ) external view returns (bool) {
         return claimed[marketId][user];
     }
 
-    function getAccumulatedFees(uint256 marketId) external view returns (uint256) {
+    function getAccumulatedFees(
+        uint256 marketId
+    ) external view returns (uint256) {
         return accumulatedFees[marketId];
     }
 
     // ── Extended getters (used by CRE workflows) ──────────────────────────────
 
-    function getMarketQuestion(uint256 marketId) external view returns (string memory) {
+    function getMarketQuestion(
+        uint256 marketId
+    ) external view returns (string memory) {
         return marketQuestions[marketId];
     }
 
@@ -66,12 +83,24 @@ abstract contract VerityStorage {
         return bettorCounts[marketId];
     }
 
-    function getResolutionData(uint256 marketId)
+    function getResolutionData(
+        uint256 marketId
+    )
         external
         view
-        returns (string memory resolutionCriteria, string memory dataSources, int256 targetValue, address priceFeedAddress)
+        returns (
+            string memory resolutionCriteria,
+            string memory dataSources,
+            int256 targetValue,
+            address priceFeedAddress
+        )
     {
         DataTypes.ResolutionMeta storage r = resolutionMeta[marketId];
-        return (r.resolutionCriteria, r.dataSources, r.targetValue, r.priceFeedAddress);
+        return (
+            r.resolutionCriteria,
+            r.dataSources,
+            r.targetValue,
+            r.priceFeedAddress
+        );
     }
 }
