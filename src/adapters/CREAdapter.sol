@@ -8,7 +8,9 @@ import {AccessManager} from "../security/AccessManager.sol";
 import {MarketFactory} from "../modules/MarketFactory.sol";
 import {RiskEngine} from "../modules/RiskEngine.sol";
 import {SettlementEngine} from "../modules/SettlementEngine.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {
+    ReentrancyGuard
+} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 abstract contract CREAdapter is
     AccessManager,
@@ -29,7 +31,6 @@ abstract contract CREAdapter is
     uint8 internal constant ACTION_REPORT_MANIPULATION = 2;
     uint8 internal constant ACTION_RESOLVE_MARKET = 3;
     uint8 internal constant ACTION_REJECT_MARKET = 5;
-    uint8 internal constant ACTION_CLAIM_PAYOUT = 6;
 
     // ============ Events ============
     event ReportReceived(uint8 indexed action, bytes32 workflowId);
@@ -54,8 +55,6 @@ abstract contract CREAdapter is
             _handleResolveMarket(report);
         } else if (action == ACTION_REJECT_MARKET) {
             _handleRejectMarket(report);
-        } else if (action == ACTION_CLAIM_PAYOUT) {
-            _handleClaimPayout(report);
         } else {
             revert Errors.InvalidOutcome();
         }
@@ -178,7 +177,10 @@ abstract contract CREAdapter is
             uint8 confidence,
             string memory reason,
             string[] memory evidenceUrls
-        ) = abi.decode(report, (uint8, uint256, uint8, uint8, string, string[]));
+        ) = abi.decode(
+                report,
+                (uint8, uint256, uint8, uint8, string, string[])
+            );
 
         _requireMarketExists(marketId);
         if (block.timestamp < markets[marketId].deadline) {
@@ -186,27 +188,6 @@ abstract contract CREAdapter is
         }
         _resolveMarket(marketId, outcome, confidence, reason, evidenceUrls);
     }
-
-    /// @dev ACTION_CLAIM_PAYOUT (Workflow 3 — Relayer)
-    ///      Allows CRE to claim payout on behalf of a user, with a gas reward.
-    ///      Payload: (uint8 action, uint256 marketId, address user, uint256 gasReward)
-    function _handleClaimPayout(bytes calldata report) internal {
-        (
-            , // action
-            uint256 marketId,
-            address user,
-            uint256 gasReward
-        ) = abi.decode(report, (uint8, uint256, address, uint256));
-
-        _claimPayoutByRelayer(marketId, user, gasReward);
-    }
-
-    /// @dev To be overridden by parent (Verity.sol)
-    function _claimPayoutByRelayer(
-        uint256 marketId,
-        address user,
-        uint256 gasReward
-    ) internal virtual;
 
     // ============ Direct Call Functions (for testing / backward compat) ============
 
@@ -248,7 +229,8 @@ abstract contract CREAdapter is
     ) external onlyCre nonReentrant {
         DataTypes.MarketProposal storage p = proposals[proposalId];
         if (p.creator == address(0)) revert Errors.ProposalNotFound();
-        if (p.status != DataTypes.ProposalStatus.Pending) revert Errors.InvalidProposalStatus();
+        if (p.status != DataTypes.ProposalStatus.Pending)
+            revert Errors.InvalidProposalStatus();
 
         address creator = p.creator;
         uint256 amount = p.amount;
@@ -264,13 +246,22 @@ abstract contract CREAdapter is
         r.question = payloadJSON;
         r.reason = reason;
 
-        emit Events.MarketRejected(rejectedId, creator, riskScore, payloadJSON, reason);
+        emit Events.MarketRejected(
+            rejectedId,
+            creator,
+            riskScore,
+            payloadJSON,
+            reason
+        );
 
         _refundProposalDeposit(creator, amount);
     }
 
     /// @dev Override in Verity to perform USDC transfer
-    function _refundProposalDeposit(address creator, uint256 amount) internal virtual;
+    function _refundProposalDeposit(
+        address creator,
+        uint256 amount
+    ) internal virtual;
 
     function reportManipulation(
         uint256 marketId,

@@ -26,6 +26,8 @@ interface IPositionToken {
 contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     using SafeERC20 for IERC20;
 
+    uint16 public constant PAYOUT_FEE_BPS = 500; // 5% fee
+
     // ============ EIP-712 Types ============
     bytes32 private constant DOMAIN_TYPEHASH =
         keccak256(
@@ -37,7 +39,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         );
     bytes32 private constant CLAIM_PAYOUT_TYPEHASH =
         keccak256(
-            "ClaimPayout(uint256 marketId,address relayer,uint256 relayerFee,uint256 nonce,uint256 deadline)"
+            "ClaimPayout(uint256 marketId,address relayer,uint256 nonce,uint256 deadline)"
         );
     bytes32 private constant SEED_LIQUIDITY_TYPEHASH =
         keccak256(
@@ -85,7 +87,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     function _getVRS(
         bytes memory signature
     ) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
-        if (signature.length != 65) revert Errors.InvalidAddress();
+        if (signature.length != 65) revert Errors.InvalidSignature();
         assembly {
             r := mload(add(signature, 32))
             s := mload(add(signature, 64))
@@ -96,7 +98,9 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     // ============ Feature 1: Anti-Spam $5 Market Proposal Deposit ============
 
     /// @notice Propose a market with $5 USDC escrow. CRE listens to MarketProposed, assesses risk, then createMarketFromCre or rejectMarketProposal.
-    function proposeMarket(string calldata payloadJSON) external nonReentrant returns (uint256 proposalId) {
+    function proposeMarket(
+        string calldata payloadJSON
+    ) external nonReentrant returns (uint256 proposalId) {
         if (msg.sender == address(0)) revert Errors.ZeroAddress();
 
         proposalId = proposalCount++;
@@ -106,18 +110,29 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         p.payloadJSON = payloadJSON;
         p.status = DataTypes.ProposalStatus.Pending;
 
-        IERC20(USDC).safeTransferFrom(msg.sender, address(this), PROPOSAL_DEPOSIT);
+        IERC20(USDC).safeTransferFrom(
+            msg.sender,
+            address(this),
+            PROPOSAL_DEPOSIT
+        );
 
         emit Events.MarketProposed(proposalId, msg.sender, payloadJSON);
     }
 
     /// @dev Override: refund creator deposit when market resolves
-    function _refundCreatorDeposit(uint256, address creator, uint256 amount) internal override {
+    function _refundCreatorDeposit(
+        uint256,
+        address creator,
+        uint256 amount
+    ) internal override {
         IERC20(USDC).safeTransfer(creator, amount);
     }
 
     /// @dev Override: refund proposal deposit when CRE rejects
-    function _refundProposalDeposit(address creator, uint256 amount) internal override {
+    function _refundProposalDeposit(
+        address creator,
+        uint256 amount
+    ) internal override {
         IERC20(USDC).safeTransfer(creator, amount);
     }
 
@@ -127,7 +142,8 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     function forceResolveDemo(uint256 marketId) external onlyAdmin {
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
-        if (m.status != uint8(DataTypes.MarketStatus.Active)) revert Errors.MarketNotActive();
+        if (m.status != uint8(DataTypes.MarketStatus.Active))
+            revert Errors.MarketNotActive();
         emit Events.SettlementRequested(marketId, msg.sender);
     }
 
@@ -143,19 +159,27 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     ) external returns (uint256 requestId) {
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
         if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
-        if (category > uint8(type(DataTypes.MarketCategory).max)) revert Errors.InvalidCategory();
+        if (category > uint8(type(DataTypes.MarketCategory).max))
+            revert Errors.InvalidCategory();
 
         requestId = requestCount++;
 
         DataTypes.MarketRequest storage r = marketRequests[requestId];
-        r.creator   = msg.sender;
-        r.question  = question;
-        r.category  = category;
-        r.deadline  = deadline;
-        r.feeBps    = feeBps;
+        r.creator = msg.sender;
+        r.question = question;
+        r.category = category;
+        r.deadline = deadline;
+        r.feeBps = feeBps;
         r.timestamp = block.timestamp;
 
-        emit Events.MarketCreationRequested(requestId, msg.sender, question, category, deadline, feeBps);
+        emit Events.MarketCreationRequested(
+            requestId,
+            msg.sender,
+            question,
+            category,
+            deadline,
+            feeBps
+        );
     }
 
     /// @notice Gasless variant: relayer records a market request on behalf of the user.
@@ -171,19 +195,27 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
         if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
-        if (category > uint8(type(DataTypes.MarketCategory).max)) revert Errors.InvalidCategory();
+        if (category > uint8(type(DataTypes.MarketCategory).max))
+            revert Errors.InvalidCategory();
 
         requestId = requestCount++;
 
         DataTypes.MarketRequest storage r = marketRequests[requestId];
-        r.creator   = creator;
-        r.question  = question;
-        r.category  = category;
-        r.deadline  = deadline;
-        r.feeBps    = feeBps;
+        r.creator = creator;
+        r.question = question;
+        r.category = category;
+        r.deadline = deadline;
+        r.feeBps = feeBps;
         r.timestamp = block.timestamp;
 
-        emit Events.MarketCreationRequested(requestId, creator, question, category, deadline, feeBps);
+        emit Events.MarketCreationRequested(
+            requestId,
+            creator,
+            question,
+            category,
+            deadline,
+            feeBps
+        );
     }
 
     function seedLiquidity(
@@ -221,6 +253,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         uint128 amountYes,
         uint128 amountNo,
         uint256 relayerFee,
+        uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external onlyRelayer nonReentrant {
@@ -234,7 +267,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
                 amountYes,
                 amountNo,
                 relayerFee,
-                nonces[tx.origin]++,
+                nonce,
                 deadline
             )
         );
@@ -245,12 +278,14 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
         address user = ecrecover(hash, v, r, s);
         if (user == address(0)) revert Errors.InvalidAddress();
+        if (nonce != nonces[user]++) revert Errors.Unauthorized();
 
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.creator != user) revert Errors.Unauthorized();
-        if (m.status != uint8(DataTypes.MarketStatus.Active)) revert Errors.MarketNotActive();
+        if (m.status != uint8(DataTypes.MarketStatus.Active))
+            revert Errors.MarketNotActive();
         if (seeded[marketId]) revert Errors.AlreadySeeded();
 
         CPMMMath.validateInitialPools(amountYes, amountNo);
@@ -292,6 +327,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         bool isYes,
         uint256 minShares,
         uint256 relayerFee,
+        uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external onlyRelayer nonReentrant {
@@ -301,12 +337,12 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             abi.encode(
                 PLACE_BET_TYPEHASH,
                 marketId,
-                msg.sender, // Only the caller can be the designated relayer
+                msg.sender,
                 amount,
                 isYes,
                 minShares,
                 relayerFee,
-                nonces[tx.origin]++,
+                nonce,
                 deadline
             )
         );
@@ -317,6 +353,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
         address user = ecrecover(hash, v, r, s);
         if (user == address(0)) revert Errors.InvalidAddress();
+        if (nonce != nonces[user]++) revert Errors.Unauthorized();
 
         _placeBet(
             marketId,
@@ -408,6 +445,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     /// @notice Gasless request settlement via meta-transaction
     function requestSettlementWithSignature(
         uint256 marketId,
+        uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external onlyRelayer {
@@ -418,7 +456,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
                 REQUEST_SETTLEMENT_TYPEHASH,
                 marketId,
                 msg.sender,
-                nonces[tx.origin]++,
+                nonce,
                 deadline
             )
         );
@@ -429,6 +467,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
         address user = ecrecover(hash, v, r, s);
         if (user == address(0)) revert Errors.InvalidAddress();
+        if (nonce != nonces[user]++) revert Errors.Unauthorized();
 
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
@@ -440,14 +479,10 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         emit Events.SettlementRequested(marketId, user);
     }
 
-    function claimPayout(uint256 marketId) external nonReentrant {
-        _claimPayout(marketId, msg.sender, 0, address(0));
-    }
-
     /// @notice Gasless payout via meta-transaction
     function claimPayoutWithSignature(
         uint256 marketId,
-        uint256 relayerFee,
+        uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external onlyRelayer nonReentrant {
@@ -458,8 +493,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
                 CLAIM_PAYOUT_TYPEHASH,
                 marketId,
                 msg.sender,
-                relayerFee,
-                nonces[tx.origin]++,
+                nonce,
                 deadline
             )
         );
@@ -470,32 +504,14 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
         address user = ecrecover(hash, v, r, s);
         if (user == address(0)) revert Errors.InvalidAddress();
+        if (nonce != nonces[user]++) revert Errors.Unauthorized();
 
-        _claimPayout(marketId, user, relayerFee, msg.sender);
-    }
-
-    /// @notice Allows CRE to claim payout on behalf of a user, with a gas reward.
-    function claimPayoutFromCre(
-        uint256 marketId,
-        address user,
-        uint256 gasReward
-    ) external onlyCre nonReentrant {
-        _claimPayout(marketId, user, gasReward, msg.sender);
-    }
-
-    /// @dev Implementation of abstract CREAdapter function.
-    function _claimPayoutByRelayer(
-        uint256 marketId,
-        address user,
-        uint256 gasReward
-    ) internal override {
-        _claimPayout(marketId, user, gasReward, msg.sender);
+        _claimPayout(marketId, user, msg.sender);
     }
 
     function _claimPayout(
         uint256 marketId,
         address user,
-        uint256 gasReward,
         address relayer
     ) internal {
         _requireMarketExists(marketId);
@@ -516,6 +532,9 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             m.outcome
         );
         if (totalPayout == 0) revert Errors.NothingToClaim();
+
+        // Calculate 5% fee
+        uint256 gasReward = (totalPayout * PAYOUT_FEE_BPS) / 10000;
         if (totalPayout <= gasReward) revert Errors.InsufficientLiquidity();
 
         claimed[marketId][user] = true;
@@ -528,21 +547,17 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
             IPositionToken(POSITION_TOKEN).burn(user, tokenId, shares);
         }
 
-        if (gasReward > 0) {
-            uint256 userAmount = totalPayout - gasReward;
-            IERC20(USDC).safeTransfer(user, userAmount);
-            IERC20(USDC).safeTransfer(relayer, gasReward);
-            emit Events.PayoutClaimedByRelayer(
-                marketId,
-                user,
-                relayer,
-                totalPayout,
-                gasReward
-            );
-        } else {
-            IERC20(USDC).safeTransfer(user, totalPayout);
-            emit Events.PayoutClaimed(marketId, user, totalPayout);
-        }
+        uint256 userAmount = totalPayout - gasReward;
+        IERC20(USDC).safeTransfer(user, userAmount);
+        IERC20(USDC).safeTransfer(relayer, gasReward);
+
+        emit Events.PayoutClaimedByRelayer(
+            marketId,
+            user,
+            relayer,
+            totalPayout,
+            gasReward
+        );
     }
 
     function claimRefund(uint256 marketId) external nonReentrant {
@@ -600,6 +615,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
     function withdrawFeesWithSignature(
         uint256 marketId,
         uint256 relayerFee,
+        uint256 nonce,
         uint256 deadline,
         bytes calldata signature
     ) external onlyRelayer nonReentrant {
@@ -611,7 +627,7 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
                 marketId,
                 msg.sender,
                 relayerFee,
-                nonces[tx.origin]++,
+                nonce,
                 deadline
             )
         );
@@ -622,12 +638,14 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         (uint8 v, bytes32 r, bytes32 s) = _getVRS(signature);
         address user = ecrecover(hash, v, r, s);
         if (user == address(0)) revert Errors.InvalidAddress();
+        if (nonce != nonces[user]++) revert Errors.Unauthorized();
 
         _requireMarketExists(marketId);
         DataTypes.Market storage m = markets[marketId];
 
         if (m.creator != user) revert Errors.Unauthorized();
-        if (m.status != uint8(DataTypes.MarketStatus.Resolved)) revert Errors.MarketNotResolved();
+        if (m.status != uint8(DataTypes.MarketStatus.Resolved))
+            revert Errors.MarketNotResolved();
 
         uint256 fees = accumulatedFees[marketId];
         if (fees == 0) revert Errors.NothingToClaim();
