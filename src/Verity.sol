@@ -93,6 +93,70 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         }
     }
 
+    // ============ CRE-1 Workflow Entry Point (Two-TX Market Creation) ============
+
+    /// @notice Records a market creation request on-chain (Tx 1 — from user wallet).
+    /// @dev Emits MarketCreationRequested. CRE-1 workflow listens for this event,
+    ///      runs 21-node BFT DON consensus, then calls onReport() to activate (Tx 2).
+    ///      Basescan shows:
+    ///        Tx 1: user  → requestMarket()  → MarketCreationRequested
+    ///        Tx 2: CRE   → onReport()       → MarketCreated + ReportReceived
+    /// @param question  Raw proposition from the user (AI will refine it in CRE)
+    /// @param category  0=CryptoPrice, 1=Event, 2=Social, 3=Other
+    /// @param deadline  Unix timestamp for market resolution deadline
+    /// @param feeBps    Protocol fee in basis points (max 1000 = 10%)
+    /// @return requestId  On-chain ID of this creation request
+    function requestMarket(
+        string calldata question,
+        uint8 category,
+        uint64 deadline,
+        uint16 feeBps
+    ) external returns (uint256 requestId) {
+        if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
+        if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
+        if (category > uint8(type(DataTypes.MarketCategory).max)) revert Errors.InvalidCategory();
+
+        requestId = requestCount++;
+
+        DataTypes.MarketRequest storage r = marketRequests[requestId];
+        r.creator   = msg.sender;
+        r.question  = question;
+        r.category  = category;
+        r.deadline  = deadline;
+        r.feeBps    = feeBps;
+        r.timestamp = block.timestamp;
+
+        emit Events.MarketCreationRequested(requestId, msg.sender, question, category, deadline, feeBps);
+    }
+
+    /// @notice Gasless variant: relayer records a market request on behalf of the user.
+    /// @dev Creator is explicitly set (not msg.sender), so the user's address appears
+    ///      correctly in MarketCreationRequested. Requires RELAYER_ROLE or ADMIN_ROLE.
+    function requestMarketFor(
+        address creator,
+        string calldata question,
+        uint8 category,
+        uint64 deadline,
+        uint16 feeBps
+    ) external onlyRelayer returns (uint256 requestId) {
+        if (creator == address(0)) revert Errors.ZeroAddress();
+        if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
+        if (feeBps > MAX_FEE_BPS) revert Errors.InvalidFeeBps();
+        if (category > uint8(type(DataTypes.MarketCategory).max)) revert Errors.InvalidCategory();
+
+        requestId = requestCount++;
+
+        DataTypes.MarketRequest storage r = marketRequests[requestId];
+        r.creator   = creator;
+        r.question  = question;
+        r.category  = category;
+        r.deadline  = deadline;
+        r.feeBps    = feeBps;
+        r.timestamp = block.timestamp;
+
+        emit Events.MarketCreationRequested(requestId, creator, question, category, deadline, feeBps);
+    }
+
     function seedLiquidity(
         uint256 marketId,
         uint128 amountYes,

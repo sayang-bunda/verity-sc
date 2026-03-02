@@ -2,6 +2,18 @@
 pragma solidity ^0.8.24;
 
 library Events {
+    /// @notice Emitted when a user records a market creation request on-chain (Tx 1).
+    /// @dev CRE-1 Workflow listens for this event to trigger DON consensus.
+    ///      After BFT consensus, CRE calls onReport() to activate the market (Tx 2).
+    event MarketCreationRequested(
+        uint256 indexed requestId,
+        address indexed creator,
+        string question,
+        uint8 category,
+        uint64 deadline,
+        uint16 feeBps
+    );
+
     event MarketCreated(
         uint256 indexed marketId,
         address indexed creator,

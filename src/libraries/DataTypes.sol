@@ -47,6 +47,18 @@ library DataTypes {
         address priceFeedAddress; // zero address if not CryptoPrice
     }
 
+    /// @notice Recorded on-chain when a user submits a market creation request (Tx 1).
+    /// @dev CRE-1 workflow picks up MarketCreationRequested event, runs BFT consensus,
+    ///      then calls onReport() to create the actual market (Tx 2).
+    struct MarketRequest {
+        address creator;
+        string question;
+        uint8 category;
+        uint64 deadline;
+        uint16 feeBps;
+        uint256 timestamp;
+    }
+
     /// @notice Records a high-risk market rejection on-chain (risk score 71-100)
     /// @dev Written by CRE via ACTION_REJECT_MARKET — immutable audit trail
     struct RejectedMarket {

@@ -26,6 +26,10 @@ abstract contract VerityStorage {
     uint256 public rejectedCount;
     mapping(uint256 => DataTypes.RejectedMarket) internal rejectedMarkets;
 
+    // ── Market creation requests (Tx 1 — user submits, CRE processes, Tx 2 activates) ──
+    uint256 public requestCount;
+    mapping(uint256 => DataTypes.MarketRequest) public marketRequests;
+
     // ── Meta-transactions (Relayer support) ──────────────────────────────────
     mapping(address => uint256) public nonces;
 
