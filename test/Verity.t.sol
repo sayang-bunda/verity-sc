@@ -7,6 +7,7 @@ import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {PositionToken} from "../src/tokens/PositionToken.sol";
 import {DataTypes} from "../src/libraries/DataTypes.sol";
 import {Errors} from "../src/libraries/Errors.sol";
+import {Events} from "../src/libraries/Events.sol";
 
 contract VerityTest is Test {
     Verity public verity;
@@ -22,6 +23,9 @@ contract VerityTest is Test {
     uint256 constant INITIAL_MINT = 100_000 * 1e6;
     uint128 constant SEED_AMOUNT = 10_000 * 1e6;
     uint256 constant BET_AMOUNT = 1_000 * 1e6;
+    uint256 constant PROPOSAL_DEPOSIT = 5 * 1e6; // $5 USDC
+    uint256 constant NO_PROPOSAL = type(uint256).max; // sentinel for createMarketFromCre (no deposit)
+    uint8 constant RISK_SCORE_LOW = 25; // 0-30 = auto approve
     uint16 constant FEE_BPS = 200;
     uint8 constant CATEGORY_CRYPTO = 0;
     uint64 constant DEADLINE_OFFSET = 7 days;
@@ -54,8 +58,13 @@ contract VerityTest is Test {
     // ============ Helpers ============
 
     function _createMarket() internal returns (uint256 id) {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket(
+            '{"question":"Will BTC reach $100k by end of 2025?","category":0,"deadline":604801,"feeBps":200}'
+        );
         vm.prank(cre);
         id = verity.createMarketFromCre(
+            proposalId,
             alice,
             uint64(block.timestamp + DEADLINE_OFFSET),
             FEE_BPS,
@@ -64,7 +73,8 @@ contract VerityTest is Test {
             "Resolved Yes if BTC price >= $100,000 USD on any major exchange",
             "Chainlink BTC/USD, CoinGecko",
             0,
-            address(0)
+            address(0),
+            RISK_SCORE_LOW
         );
     }
 
@@ -76,6 +86,235 @@ contract VerityTest is Test {
     function _placeBet(address user, uint256 id, bool isYes, uint256 amount) internal {
         vm.prank(user);
         verity.placeBet(id, amount, isYes, 0);
+    }
+
+    function _emptyUrls() internal pure returns (string[] memory) {
+        return new string[](0);
+    }
+
+    function _urls(string memory url) internal pure returns (string[] memory) {
+        string[] memory urls = new string[](1);
+        urls[0] = url;
+        return urls;
+    }
+
+    // ============ TC-F1: Feature 1 — proposeMarket, rejectMarketProposal, creatorDeposit ============
+
+    function test_F1_ProposeMarket_LocksDepositAndEmitsEvent() public {
+        string memory payload = '{"question":"Will X happen?","category":0}';
+        uint256 aliceBefore = usdc.balanceOf(alice);
+
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket(payload);
+
+        assertEq(proposalId, 0);
+        assertEq(verity.proposalCount(), 1);
+
+        DataTypes.MarketProposal memory p = verity.getProposal(proposalId);
+        assertEq(p.creator, alice);
+        assertEq(p.amount, PROPOSAL_DEPOSIT);
+        assertEq(p.payloadJSON, payload);
+        assertEq(uint8(p.status), uint8(DataTypes.ProposalStatus.Pending));
+
+        assertEq(usdc.balanceOf(alice), aliceBefore - PROPOSAL_DEPOSIT);
+        assertEq(usdc.balanceOf(address(verity)), PROPOSAL_DEPOSIT);
+    }
+
+    function test_F1_RejectMarketProposal_RefundsAndRecordsOnChain() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket('{"q":"Test?"}');
+
+        uint256 aliceBefore = usdc.balanceOf(alice);
+
+        vm.prank(cre);
+        verity.rejectMarketProposal(proposalId, 85, "High risk: speculative market");
+
+        assertEq(usdc.balanceOf(alice), aliceBefore + PROPOSAL_DEPOSIT);
+
+        DataTypes.MarketProposal memory p = verity.getProposal(proposalId);
+        assertEq(uint8(p.status), uint8(DataTypes.ProposalStatus.Rejected));
+
+        assertEq(verity.rejectedCount(), 1);
+        DataTypes.RejectedMarket memory r = verity.getRejectedMarket(0);
+        assertEq(r.creator, alice);
+        assertEq(r.riskScore, 85);
+        assertEq(r.reason, "High risk: speculative market");
+    }
+
+    function test_F1_RejectMarketProposal_NonCREReverts() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket('{"q":"Test?"}');
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.Unauthorized.selector);
+        verity.rejectMarketProposal(proposalId, 85, "reason");
+    }
+
+    function test_F1_CreateMarketWithProposal_SetsCreatorDeposit() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket('{"question":"BTC $100k?"}');
+
+        vm.prank(cre);
+        marketId = verity.createMarketFromCre(
+            proposalId,
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Will BTC reach $100k?",
+            "Yes if >= 100k",
+            "Chainlink",
+            0,
+            address(0),
+            RISK_SCORE_LOW
+        );
+
+        assertEq(verity.getCreatorDeposit(marketId), PROPOSAL_DEPOSIT);
+        assertEq(verity.getMarketRiskScore(marketId), RISK_SCORE_LOW);
+
+        DataTypes.MarketProposal memory p = verity.getProposal(proposalId);
+        assertEq(uint8(p.status), uint8(DataTypes.ProposalStatus.Approved));
+    }
+
+    function test_F1_RiskScoreStoredForFE() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket("{}");
+        uint8 customRisk = 15; // low risk
+        vm.prank(cre);
+        marketId = verity.createMarketFromCre(
+            proposalId,
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Test?",
+            "Yes",
+            "Chainlink",
+            0,
+            address(0),
+            customRisk
+        );
+        assertEq(verity.getMarketRiskScore(marketId), customRisk);
+    }
+
+    function test_F1_CreatorDepositRefundedOnResolve() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket('{"q":"BTC?"}');
+
+        vm.prank(cre);
+        marketId = verity.createMarketFromCre(
+            proposalId,
+            alice,
+            uint64(block.timestamp + DEADLINE_OFFSET),
+            FEE_BPS,
+            CATEGORY_CRYPTO,
+            "Will BTC reach $100k?",
+            "Yes if >= 100k",
+            "Chainlink",
+            0,
+            address(0),
+            RISK_SCORE_LOW
+        );
+
+        _seedMarket(marketId);
+        _placeBet(bob, marketId, true, BET_AMOUNT);
+
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+        uint256 aliceBefore = usdc.balanceOf(alice);
+
+        vm.prank(cre);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
+
+        assertEq(verity.getCreatorDeposit(marketId), 0);
+        assertEq(usdc.balanceOf(alice), aliceBefore + PROPOSAL_DEPOSIT);
+    }
+
+    // ============ TC-F2: Feature 2 — forceResolveDemo ============
+
+    function test_F2_ForceResolveDemo_EmitsSettlementRequested() public {
+        marketId = _createMarket();
+        _seedMarket(marketId);
+
+        vm.expectEmit(true, true, false, false, address(verity));
+        emit Events.SettlementRequested(marketId, admin);
+        vm.prank(admin);
+        verity.forceResolveDemo(marketId);
+    }
+
+    function test_F2_ForceResolveDemo_WorksBeforeDeadline() public {
+        marketId = _createMarket();
+        _seedMarket(marketId);
+
+        assertLt(block.timestamp, verity.getMarket(marketId).deadline);
+
+        vm.prank(admin);
+        verity.forceResolveDemo(marketId);
+
+        DataTypes.Market memory m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Active));
+    }
+
+    function test_F2_ForceResolveDemo_NonAdminReverts() public {
+        marketId = _createMarket();
+        vm.prank(bob);
+        vm.expectRevert(Errors.Unauthorized.selector);
+        verity.forceResolveDemo(marketId);
+    }
+
+    function test_F2_ForceResolveDemo_InactiveMarketReverts() public {
+        marketId = _createMarket();
+        vm.prank(cre);
+        verity.reportManipulation(marketId, 80, "Manipulation");
+
+        vm.prank(admin);
+        vm.expectRevert(Errors.MarketNotActive.selector);
+        verity.forceResolveDemo(marketId);
+    }
+
+    // ============ TC-F3: Feature 3 — resolveMarketFromCre with reason + evidenceUrls ============
+
+    function test_F3_ResolveWithEvidence_StoresAndEmits() public {
+        marketId = _createMarket();
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+
+        string memory reason = "BTC reached $105,000 on Binance at resolution time";
+        string[] memory urls = new string[](2);
+        urls[0] = "https://api.binance.com/price";
+        urls[1] = "https://news.example.com/btc-105k";
+
+        vm.prank(cre);
+        verity.resolveMarketFromCre(
+            marketId,
+            uint8(DataTypes.MarketOutcome.Yes),
+            95,
+            reason,
+            urls
+        );
+
+        (string memory storedReason, string[] memory storedUrls) = verity.getResolutionEvidence(marketId);
+        assertEq(storedReason, reason);
+        assertEq(storedUrls.length, 2);
+        assertEq(storedUrls[0], urls[0]);
+        assertEq(storedUrls[1], urls[1]);
+
+        DataTypes.Market memory m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
+        assertEq(m.outcome, uint8(DataTypes.MarketOutcome.Yes));
+    }
+
+    function test_F3_ResolveWithEmptyEvidence_StillResolves() public {
+        marketId = _createMarket();
+        vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
+
+        vm.prank(cre);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 95, "", _emptyUrls());
+
+        (string memory reason, string[] memory urls) = verity.getResolutionEvidence(marketId);
+        assertEq(bytes(reason).length, 0);
+        assertEq(urls.length, 0);
+
+        DataTypes.Market memory m = verity.getMarket(marketId);
+        assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
     }
 
     // ============ TC-01 ~ TC-02: Deploy ============
@@ -108,25 +347,39 @@ contract VerityTest is Test {
 
     function test_TC04_NonCRECannotCreateMarket() public {
         vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket("{}");
+        vm.prank(alice);
         vm.expectRevert(Errors.Unauthorized.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
+            proposalId, alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0), RISK_SCORE_LOW
         );
     }
 
     function test_TC05_PastDeadlineReverts() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket("{}");
         vm.prank(cre);
         vm.expectRevert(Errors.DeadlineAlreadyPassed.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
+            proposalId, alice, uint64(block.timestamp - 1), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0), RISK_SCORE_LOW
+        );
+    }
+
+    function test_TC06a_NoProposalReverts() public {
+        vm.prank(cre);
+        vm.expectRevert(Errors.ProposalRequired.selector);
+        verity.createMarketFromCre(
+            NO_PROPOSAL, alice, uint64(block.timestamp + DEADLINE_OFFSET), FEE_BPS, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0), RISK_SCORE_LOW
         );
     }
 
     function test_TC06_FeeTooHighReverts() public {
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket("{}");
         vm.prank(cre);
         vm.expectRevert(Errors.InvalidFeeBps.selector);
         verity.createMarketFromCre(
-            alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0)
+            proposalId, alice, uint64(block.timestamp + DEADLINE_OFFSET), 1001, CATEGORY_CRYPTO, "Test?", "Criteria", "Sources", 0, address(0), RISK_SCORE_LOW
         );
     }
 
@@ -271,7 +524,7 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Resolved));
@@ -282,7 +535,7 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 70);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 70, "", _emptyUrls());
 
         DataTypes.Market memory m = verity.getMarket(marketId);
         assertEq(m.status, uint8(DataTypes.MarketStatus.Escalated));
@@ -293,9 +546,9 @@ contract VerityTest is Test {
         marketId = _createMarket();
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.startPrank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
         vm.expectRevert(Errors.MarketAlreadyResolved.selector);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.No), 95, "", _emptyUrls());
         vm.stopPrank();
     }
 
@@ -308,7 +561,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -325,7 +578,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         vm.prank(charlie);
         vm.expectRevert(Errors.NothingToClaim.selector);
@@ -339,7 +592,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         vm.startPrank(bob);
         verity.claimPayout(marketId);
@@ -357,7 +610,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70, "", _emptyUrls());
 
         uint256 balBefore = usdc.balanceOf(bob);
         vm.prank(bob);
@@ -376,7 +629,7 @@ contract VerityTest is Test {
         // Resolve market first (required by withdrawFees security check)
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         uint256 fees = verity.getAccumulatedFees(marketId);
         uint256 balBefore = usdc.balanceOf(alice);
@@ -408,7 +661,7 @@ contract VerityTest is Test {
 
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
         vm.prank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
 
         assertEq(verity.getMarket(marketId).status, uint8(DataTypes.MarketStatus.Resolved));
 
@@ -478,8 +731,13 @@ contract VerityTest is Test {
         console2.log("  Fee     : 2%");
         console2.log("  Deadline: 7 days from now");
 
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket(
+            '{"question":"Will BTC reach $100k?","category":0,"deadline":604801,"feeBps":200}'
+        );
         vm.startPrank(cre);
         marketId = verity.createMarketFromCre(
+            proposalId,
             alice,
             uint64(block.timestamp + DEADLINE_OFFSET),
             FEE_BPS,
@@ -488,7 +746,8 @@ contract VerityTest is Test {
             "Resolved Yes if BTC >= $100,000 on any major exchange",
             "Chainlink BTC/USD, CoinGecko",
             int256(100_000 * 1e8), // $100,000 with 8 decimals (Chainlink format)
-            address(0)             // priceFeedAddress set on deploy
+            address(0),            // priceFeedAddress set on deploy
+            RISK_SCORE_LOW
         );
         vm.stopPrank();
 
@@ -618,7 +877,7 @@ contract VerityTest is Test {
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
 
         vm.startPrank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 95, "", _emptyUrls());
         vm.stopPrank();
 
         m = verity.getMarket(marketId);
@@ -774,8 +1033,13 @@ contract VerityTest is Test {
         console2.log("STEP 1: Create Market & Place Bets");
         console2.log("--------------------------------------");
 
+        vm.prank(alice);
+        uint256 proposalId = verity.proposeMarket(
+            '{"question":"Will ETH flip BTC?","category":0,"deadline":604801,"feeBps":200}'
+        );
         vm.startPrank(cre);
         marketId = verity.createMarketFromCre(
+            proposalId,
             alice,
             uint64(block.timestamp + DEADLINE_OFFSET),
             FEE_BPS,
@@ -784,7 +1048,8 @@ contract VerityTest is Test {
             "Resolved Yes if ETH market cap > BTC market cap",
             "CoinGecko, CoinMarketCap",
             0,
-            address(0)
+            address(0),
+            RISK_SCORE_LOW
         );
         vm.stopPrank();
 
@@ -819,7 +1084,7 @@ contract VerityTest is Test {
         vm.warp(block.timestamp + DEADLINE_OFFSET + 1);
 
         vm.startPrank(cre);
-        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70);
+        verity.resolveMarketFromCre(marketId, uint8(DataTypes.MarketOutcome.Yes), 70, "", _emptyUrls());
         vm.stopPrank();
 
         DataTypes.Market memory m = verity.getMarket(marketId);

@@ -33,6 +33,20 @@ library DataTypes {
         uint256 totalVolume;
     }
 
+    /// @notice Anti-spam: $5 escrow when user proposes a market. Refunded if rejected or when market resolves.
+    enum ProposalStatus {
+        Pending,
+        Approved,
+        Rejected
+    }
+
+    struct MarketProposal {
+        address creator;
+        uint256 amount;
+        string payloadJSON;
+        ProposalStatus status;
+    }
+
     struct UserPosition {
         uint128 yesShares;
         uint128 noShares;

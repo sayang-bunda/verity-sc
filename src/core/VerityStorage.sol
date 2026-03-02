@@ -26,6 +26,22 @@ abstract contract VerityStorage {
     uint256 public rejectedCount;
     mapping(uint256 => DataTypes.RejectedMarket) internal rejectedMarkets;
 
+    // ── Feature 1: Anti-spam $5 market proposal deposit ─────────────────────
+    uint256 public constant PROPOSAL_DEPOSIT = 5 * 1e6; // $5 USDC (6 decimals)
+    uint256 public constant NO_PROPOSAL = type(uint256).max; // sentinel: no deposit (backward compat)
+    uint256 public proposalCount;
+    mapping(uint256 => DataTypes.MarketProposal) internal proposals;
+
+    // ── Creator deposit (refunded when market resolves) ──────────────────────
+    mapping(uint256 => uint256) internal creatorDeposits;
+
+    // ── Risk score (0-100) dari CRE saat approve proposal — FE bisa baca ─────
+    mapping(uint256 => uint8) internal marketRiskScores;
+
+    // ── Feature 3: Resolution evidence ──────────────────────────────────────
+    mapping(uint256 => string) internal resolutionReasons;
+    mapping(uint256 => string[]) internal resolutionEvidenceUrls;
+
     // ── Market creation requests (Tx 1 — user submits, CRE processes, Tx 2 activates) ──
     uint256 public requestCount;
     mapping(uint256 => DataTypes.MarketRequest) public marketRequests;
@@ -109,6 +125,29 @@ abstract contract VerityStorage {
             r.targetValue,
             r.priceFeedAddress
         );
+    }
+
+    // ── Proposal getters ────────────────────────────────────────────────────
+
+    function getProposal(uint256 proposalId) external view returns (DataTypes.MarketProposal memory) {
+        return proposals[proposalId];
+    }
+
+    function getCreatorDeposit(uint256 marketId) external view returns (uint256) {
+        return creatorDeposits[marketId];
+    }
+
+    /// @notice Risk score (0-100) dari CRE saat approve proposal. 0 = belum diset.
+    function getMarketRiskScore(uint256 marketId) external view returns (uint8) {
+        return marketRiskScores[marketId];
+    }
+
+    function getResolutionEvidence(uint256 marketId)
+        external
+        view
+        returns (string memory reason, string[] memory evidenceUrls)
+    {
+        return (resolutionReasons[marketId], resolutionEvidenceUrls[marketId]);
     }
 
     // ── Rejected market getter ─────────────────────────────────────────────────

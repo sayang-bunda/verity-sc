@@ -93,19 +93,48 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         }
     }
 
+    // ============ Feature 1: Anti-Spam $5 Market Proposal Deposit ============
+
+    /// @notice Propose a market with $5 USDC escrow. CRE listens to MarketProposed, assesses risk, then createMarketFromCre or rejectMarketProposal.
+    function proposeMarket(string calldata payloadJSON) external nonReentrant returns (uint256 proposalId) {
+        if (msg.sender == address(0)) revert Errors.ZeroAddress();
+
+        proposalId = proposalCount++;
+        DataTypes.MarketProposal storage p = proposals[proposalId];
+        p.creator = msg.sender;
+        p.amount = PROPOSAL_DEPOSIT;
+        p.payloadJSON = payloadJSON;
+        p.status = DataTypes.ProposalStatus.Pending;
+
+        IERC20(USDC).safeTransferFrom(msg.sender, address(this), PROPOSAL_DEPOSIT);
+
+        emit Events.MarketProposed(proposalId, msg.sender, payloadJSON);
+    }
+
+    /// @dev Override: refund creator deposit when market resolves
+    function _refundCreatorDeposit(uint256, address creator, uint256 amount) internal override {
+        IERC20(USDC).safeTransfer(creator, amount);
+    }
+
+    /// @dev Override: refund proposal deposit when CRE rejects
+    function _refundProposalDeposit(address creator, uint256 amount) internal override {
+        IERC20(USDC).safeTransfer(creator, amount);
+    }
+
+    // ============ Feature 2: Force Resolve Demo (Hackathon Override) ============
+
+    /// @notice Admin bypass: emit SettlementRequested without deadline check. Triggers CRE-3 for instant resolve.
+    function forceResolveDemo(uint256 marketId) external onlyAdmin {
+        _requireMarketExists(marketId);
+        DataTypes.Market storage m = markets[marketId];
+        if (m.status != uint8(DataTypes.MarketStatus.Active)) revert Errors.MarketNotActive();
+        emit Events.SettlementRequested(marketId, msg.sender);
+    }
+
     // ============ CRE-1 Workflow Entry Point (Two-TX Market Creation) ============
 
-    /// @notice Records a market creation request on-chain (Tx 1 — from user wallet).
-    /// @dev Emits MarketCreationRequested. CRE-1 workflow listens for this event,
-    ///      runs 21-node BFT DON consensus, then calls onReport() to activate (Tx 2).
-    ///      Basescan shows:
-    ///        Tx 1: user  → requestMarket()  → MarketCreationRequested
-    ///        Tx 2: CRE   → onReport()       → MarketCreated + ReportReceived
-    /// @param question  Raw proposition from the user (AI will refine it in CRE)
-    /// @param category  0=CryptoPrice, 1=Event, 2=Social, 3=Other
-    /// @param deadline  Unix timestamp for market resolution deadline
-    /// @param feeBps    Protocol fee in basis points (max 1000 = 10%)
-    /// @return requestId  On-chain ID of this creation request
+    /// @notice DEPRECATED: Gunakan proposeMarket() + deposit $5. Semua user wajib deposit anti-spam.
+    /// @dev Tetap tersedia untuk backward compat, tapi CRE tidak bisa create market dari sini (perlu proposalId).
     function requestMarket(
         string calldata question,
         uint8 category,

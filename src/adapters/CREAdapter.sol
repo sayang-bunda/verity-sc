@@ -8,12 +8,14 @@ import {AccessManager} from "../security/AccessManager.sol";
 import {MarketFactory} from "../modules/MarketFactory.sol";
 import {RiskEngine} from "../modules/RiskEngine.sol";
 import {SettlementEngine} from "../modules/SettlementEngine.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 abstract contract CREAdapter is
     AccessManager,
     MarketFactory,
     RiskEngine,
-    SettlementEngine
+    SettlementEngine,
+    ReentrancyGuard
 {
     // ============ Action Types (CRE → Contract routing) ============
     // ACTION 1: Low risk (0-30)   → auto create market
@@ -68,14 +70,13 @@ abstract contract CREAdapter is
     // ============ Internal Report Handlers ============
 
     /// @dev ACTION_CREATE_MARKET (Workflow 1)
-    ///      Used for LOW risk (0-30) direct approval AND
-    ///      MEDIUM risk (31-70) after BFT consensus of 21 nodes
-    ///      Payload: (uint8 action, address creator, uint64 deadline, uint16 feeBps,
+    ///      Payload: (uint8 action, uint256 proposalId, address creator, uint64 deadline, uint16 feeBps,
     ///               uint8 category, string question, string criteria, string sources,
-    ///               int256 targetValue, address priceFeedAddress)
+    ///               int256 targetValue, address priceFeedAddress, uint8 riskScore)
     function _handleCreateMarket(bytes calldata report) internal {
         (
-            , // action — already decoded
+            , // action
+            uint256 proposalId,
             address creator,
             uint64 deadline,
             uint16 feeBps,
@@ -84,11 +85,13 @@ abstract contract CREAdapter is
             string memory resolutionCriteria,
             string memory dataSources,
             int256 targetValue,
-            address priceFeedAddress
+            address priceFeedAddress,
+            uint8 riskScore
         ) = abi.decode(
                 report,
                 (
                     uint8,
+                    uint256,
                     address,
                     uint64,
                     uint16,
@@ -97,13 +100,13 @@ abstract contract CREAdapter is
                     string,
                     string,
                     int256,
-                    address
+                    address,
+                    uint8
                 )
             );
 
-        // No ADMIN check — any user can request market via CRE
-        // For medium risk, CRE has already achieved BFT consensus before calling this
         _createMarket(
+            proposalId,
             creator,
             deadline,
             feeBps,
@@ -112,7 +115,8 @@ abstract contract CREAdapter is
             resolutionCriteria,
             dataSources,
             targetValue,
-            priceFeedAddress
+            priceFeedAddress,
+            riskScore
         );
     }
 
@@ -163,21 +167,24 @@ abstract contract CREAdapter is
         _reportManipulation(marketId, score, reason);
     }
 
-    /// @dev ACTION_RESOLVE_MARKET (Workflow 3)
-    ///      Payload: (uint8 action, uint256 marketId, uint8 outcome, uint8 confidence)
+    /// @dev ACTION_RESOLVE_MARKET (Workflow 3) — Feature 3
+    ///      Payload: (uint8 action, uint256 marketId, uint8 outcome, uint8 confidence,
+    ///               string reason, string[] evidenceUrls)
     function _handleResolveMarket(bytes calldata report) internal {
         (
             , // action
             uint256 marketId,
             uint8 outcome,
-            uint8 confidence
-        ) = abi.decode(report, (uint8, uint256, uint8, uint8));
+            uint8 confidence,
+            string memory reason,
+            string[] memory evidenceUrls
+        ) = abi.decode(report, (uint8, uint256, uint8, uint8, string, string[]));
 
         _requireMarketExists(marketId);
         if (block.timestamp < markets[marketId].deadline) {
             revert Errors.DeadlineNotReached();
         }
-        _resolveMarket(marketId, outcome, confidence);
+        _resolveMarket(marketId, outcome, confidence, reason, evidenceUrls);
     }
 
     /// @dev ACTION_CLAIM_PAYOUT (Workflow 3 — Relayer)
@@ -203,7 +210,10 @@ abstract contract CREAdapter is
 
     // ============ Direct Call Functions (for testing / backward compat) ============
 
+    /// @param proposalId dari proposeMarket (user deposit $5)
+    /// @param riskScore 0-100 dari CRE — disimpan on-chain agar FE bisa baca
     function createMarketFromCre(
+        uint256 proposalId,
         address creator,
         uint64 deadline,
         uint16 feeBps,
@@ -212,9 +222,11 @@ abstract contract CREAdapter is
         string calldata resolutionCriteria,
         string calldata dataSources,
         int256 targetValue,
-        address priceFeedAddress
+        address priceFeedAddress,
+        uint8 riskScore
     ) external onlyCre returns (uint256 marketId) {
         marketId = _createMarket(
+            proposalId,
             creator,
             deadline,
             feeBps,
@@ -223,9 +235,42 @@ abstract contract CREAdapter is
             resolutionCriteria,
             dataSources,
             targetValue,
-            priceFeedAddress
+            priceFeedAddress,
+            riskScore
         );
     }
+
+    /// @notice CRE rejects proposal (risk 71-100). Refunds $5 and records on-chain.
+    function rejectMarketProposal(
+        uint256 proposalId,
+        uint8 riskScore,
+        string calldata reason
+    ) external onlyCre nonReentrant {
+        DataTypes.MarketProposal storage p = proposals[proposalId];
+        if (p.creator == address(0)) revert Errors.ProposalNotFound();
+        if (p.status != DataTypes.ProposalStatus.Pending) revert Errors.InvalidProposalStatus();
+
+        address creator = p.creator;
+        uint256 amount = p.amount;
+        string memory payloadJSON = p.payloadJSON;
+
+        p.status = DataTypes.ProposalStatus.Rejected;
+
+        uint256 rejectedId = rejectedCount++;
+        DataTypes.RejectedMarket storage r = rejectedMarkets[rejectedId];
+        r.creator = creator;
+        r.riskScore = riskScore;
+        r.timestamp = block.timestamp;
+        r.question = payloadJSON;
+        r.reason = reason;
+
+        emit Events.MarketRejected(rejectedId, creator, riskScore, payloadJSON, reason);
+
+        _refundProposalDeposit(creator, amount);
+    }
+
+    /// @dev Override in Verity to perform USDC transfer
+    function _refundProposalDeposit(address creator, uint256 amount) internal virtual;
 
     function reportManipulation(
         uint256 marketId,
@@ -236,16 +281,19 @@ abstract contract CREAdapter is
         _reportManipulation(marketId, score, reason);
     }
 
+    /// @notice Feature 3: resolve with AI reason and evidence URLs
     function resolveMarketFromCre(
         uint256 marketId,
         uint8 outcome,
-        uint8 confidence
+        uint8 confidence,
+        string calldata reason,
+        string[] calldata evidenceUrls
     ) external onlyCre {
         _requireMarketExists(marketId);
         if (block.timestamp < markets[marketId].deadline) {
             revert Errors.DeadlineNotReached();
         }
-        _resolveMarket(marketId, outcome, confidence);
+        _resolveMarket(marketId, outcome, confidence, reason, evidenceUrls);
     }
 
     function unpauseMarket(uint256 marketId) external onlyAdmin {

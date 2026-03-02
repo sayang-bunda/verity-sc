@@ -25,6 +25,13 @@ library Events {
         string dataSources
     );
 
+    /// @notice Emitted when user proposes a market with $5 deposit (Feature 1 — CRE listens)
+    event MarketProposed(
+        uint256 indexed proposalId,
+        address indexed creator,
+        string payloadJSON
+    );
+
     /// @notice Emitted when CRE records a high-risk market rejection on-chain (risk 71-100)
     event MarketRejected(
         uint256 indexed rejectedId,
@@ -54,6 +61,15 @@ library Events {
         uint256 indexed marketId,
         uint8 outcome,
         uint8 confidence
+    );
+
+    /// @notice Emitted when market resolved with AI evidence (Feature 3)
+    event MarketResolvedWithEvidence(
+        uint256 indexed marketId,
+        uint8 outcome,
+        uint8 confidence,
+        string reason,
+        string[] evidenceUrls
     );
     event MarketEscalated(uint256 indexed marketId, uint8 confidence);
     event ManipulationDetected(

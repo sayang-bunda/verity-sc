@@ -9,7 +9,9 @@ import {VerityStorage} from "../core/VerityStorage.sol";
 abstract contract MarketFactory is VerityStorage {
     uint16 public constant MAX_FEE_BPS = 1000;
 
+    /// @dev proposalId wajib valid (dari proposeMarket). riskScore (0-100) disimpan agar FE bisa baca.
     function _createMarket(
+        uint256 proposalId,
         address creator,
         uint64 deadline,
         uint16 feeBps,
@@ -18,7 +20,8 @@ abstract contract MarketFactory is VerityStorage {
         string memory resolutionCriteria,
         string memory dataSources,
         int256 targetValue,
-        address priceFeedAddress
+        address priceFeedAddress,
+        uint8 riskScore
     ) internal returns (uint256 marketId) {
         if (creator == address(0)) revert Errors.ZeroAddress();
         if (deadline <= block.timestamp) revert Errors.DeadlineAlreadyPassed();
@@ -26,9 +29,17 @@ abstract contract MarketFactory is VerityStorage {
         if (category > uint8(type(DataTypes.MarketCategory).max)) {
             revert Errors.InvalidCategory();
         }
+        if (proposalId == NO_PROPOSAL) revert Errors.ProposalRequired();
+
+        DataTypes.MarketProposal storage p = proposals[proposalId];
+        if (p.creator == address(0)) revert Errors.ProposalNotFound();
+        if (p.status != DataTypes.ProposalStatus.Pending) revert Errors.InvalidProposalStatus();
+        if (p.creator != creator) revert Errors.Unauthorized();
+        p.status = DataTypes.ProposalStatus.Approved;
 
         marketId = marketCount++;
-
+        creatorDeposits[marketId] = p.amount;
+        marketRiskScores[marketId] = riskScore;
         DataTypes.Market storage m = markets[marketId];
         m.creator = creator;
         m.deadline = deadline;

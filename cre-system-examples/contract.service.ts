@@ -29,9 +29,26 @@ export class ContractService {
     }
 
     /**
-     * Create Market - Fungsi CRE untuk membuat market baru
+     * Propose Market - User deposit $5 USDC (anti-spam). CRE listen MarketProposed, lalu createMarket atau rejectMarketProposal.
+     */
+    async proposeMarket(payloadJSON: string): Promise<{ txHash: string; proposalId: bigint }> {
+        try {
+            const tx = await this.contract.proposeMarket(payloadJSON);
+            const receipt = await tx.wait();
+            const event = receipt.logs.find((log: any) => log.eventName === 'MarketProposed');
+            const proposalId = event?.args?.proposalId ?? 0n;
+            return { txHash: receipt.hash, proposalId };
+        } catch (error) {
+            console.error('Error proposing market:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create Market - Fungsi CRE untuk membuat market baru (wajib ada proposalId dari proposeMarket)
      */
     async createMarket(params: {
+        proposalId: bigint; // Wajib: dari proposeMarket (user harus deposit $5 dulu)
         creator: string;
         deadline: number; // Unix timestamp
         feeBps: number; // 0-1000 (0-10%)
@@ -39,16 +56,23 @@ export class ContractService {
         question: string;
         resolutionCriteria: string;
         dataSources: string;
+        riskScore: number; // 0-100 dari CRE — disimpan on-chain untuk FE
+        targetValue?: bigint;
+        priceFeedAddress?: string;
     }): Promise<{ txHash: string; marketId: bigint }> {
         try {
             const tx = await this.contract.createMarketFromCre(
+                params.proposalId,
                 params.creator,
                 params.deadline,
                 params.feeBps,
                 params.category,
                 params.question,
                 params.resolutionCriteria,
-                params.dataSources
+                params.dataSources,
+                params.targetValue ?? 0,
+                params.priceFeedAddress ?? ethers.ZeroAddress,
+                params.riskScore
             );
 
             const receipt = await tx.wait();
@@ -105,7 +129,8 @@ export class ContractService {
     async resolveMarket(
         marketId: bigint,
         outcome: number, // 0=Unresolved, 1=Yes, 2=No
-        confidence: number // 0-100
+        confidence: number, // 0-100
+        params?: { reason?: string; evidenceUrls?: string[] }
     ): Promise<{ txHash: string; resolved: boolean }> {
         try {
             // Check deadline sudah lewat
@@ -119,7 +144,9 @@ export class ContractService {
             const tx = await this.contract.resolveMarketFromCre(
                 marketId,
                 outcome,
-                confidence
+                confidence,
+                params?.reason ?? "",
+                params?.evidenceUrls ?? []
             );
 
             const receipt = await tx.wait();
@@ -142,6 +169,13 @@ export class ContractService {
      */
     async getMarket(marketId: bigint) {
         return await this.contract.getMarket(marketId);
+    }
+
+    /**
+     * Get Market Risk Score - FE baca risk score (0-100) dari CRE
+     */
+    async getMarketRiskScore(marketId: bigint): Promise<number> {
+        return Number(await this.contract.getMarketRiskScore(marketId));
     }
 
     /**

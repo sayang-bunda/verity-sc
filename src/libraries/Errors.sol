@@ -50,4 +50,9 @@ library Errors {
 
     // TRANSFER
     error TransferFailed();
+
+    // PROPOSAL
+    error ProposalNotFound();
+    error InvalidProposalStatus();
+    error ProposalRequired(); // Semua user harus deposit via proposeMarket dulu
 }
