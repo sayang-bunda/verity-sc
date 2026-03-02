@@ -33,14 +33,29 @@ abstract contract MarketFactory is VerityStorage {
 
         DataTypes.MarketProposal storage p = proposals[proposalId];
         if (p.creator == address(0)) revert Errors.ProposalNotFound();
-        if (p.status != DataTypes.ProposalStatus.Pending) revert Errors.InvalidProposalStatus();
+        if (p.status != DataTypes.ProposalStatus.Pending)
+            revert Errors.InvalidProposalStatus();
         if (p.creator != creator) revert Errors.Unauthorized();
         p.status = DataTypes.ProposalStatus.Approved;
 
         marketId = marketCount++;
         creatorDeposits[marketId] = p.amount;
         marketRiskScores[marketId] = riskScore;
+
+        // Auto-seed liquidity (200 USDC total) from Admin/Contract balance
+        // Note: 100 USDC for YES, 100 USDC for NO. (6 decimals for USDC)
+        uint128 initialLiquidityPerSide = 100 * 1e6; 
         DataTypes.Market storage m = markets[marketId];
+        m.poolYes = initialLiquidityPerSide;
+        m.poolNo = initialLiquidityPerSide;
+        seeded[marketId] = true;
+
+        emit Events.LiquiditySeeded(
+            marketId,
+            msg.sender, // Admin/CRE as the provider
+            initialLiquidityPerSide,
+            initialLiquidityPerSide
+        );
         m.creator = creator;
         m.deadline = deadline;
         m.feeBps = feeBps;
@@ -57,7 +72,14 @@ abstract contract MarketFactory is VerityStorage {
         r.priceFeedAddress = priceFeedAddress;
 
         emit Events.MarketCreated(
-            marketId, creator, category, deadline, feeBps, question, resolutionCriteria, dataSources
+            marketId,
+            creator,
+            category,
+            deadline,
+            feeBps,
+            question,
+            resolutionCriteria,
+            dataSources
         );
     }
 }
