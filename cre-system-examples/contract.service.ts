@@ -179,6 +179,14 @@ export class ContractService {
     }
 
     /**
+     * Get Resolution Evidence - FE baca reason + evidence URLs pas settlement
+     */
+    async getResolutionEvidence(marketId: bigint): Promise<{ reason: string; evidenceUrls: string[] }> {
+        const [reason, evidenceUrls] = await this.contract.getResolutionEvidence(marketId);
+        return { reason, evidenceUrls };
+    }
+
+    /**
      * Listen to Events - Real-time monitoring
      */
     onMarketCreated(callback: (marketId: bigint, creator: string) => void) {
@@ -200,6 +208,17 @@ export class ContractService {
     ) {
         this.contract.on('MarketResolved', (marketId, outcome, event) => {
             callback(marketId, outcome);
+        });
+    }
+
+    /**
+     * Listen MarketResolvedWithEvidence - dapat reason + evidenceUrls pas settlement
+     */
+    onMarketResolvedWithEvidence(
+        callback: (marketId: bigint, outcome: number, confidence: number, reason: string, evidenceUrls: string[]) => void
+    ) {
+        this.contract.on('MarketResolvedWithEvidence', (marketId, outcome, confidence, reason, evidenceUrls, event) => {
+            callback(marketId, Number(outcome), Number(confidence), reason, evidenceUrls);
         });
     }
 }
