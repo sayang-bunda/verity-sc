@@ -287,6 +287,20 @@ abstract contract CREAdapter is
         _resolveMarket(marketId, outcome, confidence, reason, evidenceUrls);
     }
 
+    /// @notice Demo bypass: CRE resolves market WITHOUT deadline check.
+    ///         Called by the CRE simulator after admin fires forceResolveDemo().
+    ///         Hackathon-only — allows instant settlement for live demos.
+    function forceSettleFromCre(
+        uint256 marketId,
+        uint8 outcome,
+        uint8 confidence,
+        string calldata reason,
+        string[] calldata evidenceUrls
+    ) external onlyCre {
+        _requireMarketExists(marketId);
+        _resolveMarket(marketId, outcome, confidence, reason, evidenceUrls);
+    }
+
     function unpauseMarket(uint256 marketId) external onlyAdmin {
         _requireMarketExists(marketId);
         _unpauseMarket(marketId);
