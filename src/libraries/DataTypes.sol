@@ -82,4 +82,21 @@ library DataTypes {
         string question;
         string reason;
     }
+
+    /// @notice Records a medium-risk market (risk score 31-70) awaiting Admin approval
+    /// @dev Written by CRE via ACTION_QUEUE_PENDING — targetValue & priceFeedAddress
+    ///      required for CryptoPrice resolution in CRE-3
+    struct PendingMarket {
+        uint256 proposalId;
+        address creator;
+        uint64 deadline;
+        uint16 feeBps;
+        uint8 category;
+        string question;
+        string resolutionCriteria;
+        string dataSources;
+        int256 targetValue;
+        address priceFeedAddress;
+        uint8 riskScore;
+    }
 }

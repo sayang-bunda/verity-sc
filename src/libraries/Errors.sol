@@ -55,4 +55,7 @@ library Errors {
     error ProposalNotFound();
     error InvalidProposalStatus();
     error ProposalRequired(); // Semua user harus deposit via proposeMarket dulu
+
+    // PENDING MARKET
+    error PendingMarketNotFound();
 }

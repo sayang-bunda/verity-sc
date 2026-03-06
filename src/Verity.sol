@@ -479,6 +479,11 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         emit Events.SettlementRequested(marketId, user);
     }
 
+    /// @notice Claim payout for resolved market (direct call)
+    function claimPayout(uint256 marketId) external nonReentrant {
+        _claimPayout(marketId, msg.sender, address(0));
+    }
+
     /// @notice Gasless payout via meta-transaction
     function claimPayoutWithSignature(
         uint256 marketId,
@@ -533,8 +538,10 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
         );
         if (totalPayout == 0) revert Errors.NothingToClaim();
 
-        // Calculate 5% fee
-        uint256 gasReward = (totalPayout * PAYOUT_FEE_BPS) / 10000;
+        // Calculate 5% fee (only when relayer is used)
+        uint256 gasReward = relayer != address(0)
+            ? (totalPayout * PAYOUT_FEE_BPS) / 10000
+            : 0;
         if (totalPayout <= gasReward) revert Errors.InsufficientLiquidity();
 
         claimed[marketId][user] = true;
@@ -549,15 +556,18 @@ contract Verity is ReentrancyGuard, CREAdapter, BettingEngine {
 
         uint256 userAmount = totalPayout - gasReward;
         IERC20(USDC).safeTransfer(user, userAmount);
-        IERC20(USDC).safeTransfer(relayer, gasReward);
-
-        emit Events.PayoutClaimedByRelayer(
-            marketId,
-            user,
-            relayer,
-            totalPayout,
-            gasReward
-        );
+        if (gasReward > 0) {
+            IERC20(USDC).safeTransfer(relayer, gasReward);
+            emit Events.PayoutClaimedByRelayer(
+                marketId,
+                user,
+                relayer,
+                totalPayout,
+                gasReward
+            );
+        } else {
+            emit Events.PayoutClaimed(marketId, user, userAmount);
+        }
     }
 
     function claimRefund(uint256 marketId) external nonReentrant {

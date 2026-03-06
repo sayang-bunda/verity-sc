@@ -26,6 +26,10 @@ abstract contract VerityStorage {
     uint256 public rejectedCount;
     mapping(uint256 => DataTypes.RejectedMarket) internal rejectedMarkets;
 
+    // ── Pending markets (risk score 31-70, await Admin approval) ─────────────
+    uint256 public pendingCount;
+    mapping(uint256 => DataTypes.PendingMarket) internal pendingMarkets;
+
     // ── Feature 1: Anti-spam $5 market proposal deposit ─────────────────────
     uint256 public constant PROPOSAL_DEPOSIT = 5 * 1e6; // $5 USDC (6 decimals)
     uint256 public constant NO_PROPOSAL = type(uint256).max; // sentinel: no deposit (backward compat)
@@ -156,5 +160,13 @@ abstract contract VerityStorage {
         uint256 rejectedId
     ) external view returns (DataTypes.RejectedMarket memory) {
         return rejectedMarkets[rejectedId];
+    }
+
+    // ── Pending market getter ───────────────────────────────────────────────────
+
+    function getPendingMarket(
+        uint256 pendingId
+    ) external view returns (DataTypes.PendingMarket memory) {
+        return pendingMarkets[pendingId];
     }
 }

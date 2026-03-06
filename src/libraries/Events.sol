@@ -41,6 +41,14 @@ library Events {
         string reason
     );
 
+    /// @notice Emitted when CRE queues a medium-risk market (31-70) for Admin approval
+    event PendingMarketQueued(
+        uint256 indexed pendingId,
+        uint256 proposalId,
+        address indexed creator,
+        uint8 riskScore
+    );
+
     event LiquiditySeeded(
         uint256 indexed marketId,
         address indexed creator,
