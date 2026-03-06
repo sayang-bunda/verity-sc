@@ -24,12 +24,13 @@ abstract contract CREAdapter is
     // ACTION 2: Workflow 2        → report manipulation
     // ACTION 3: Workflow 3        → resolve market
     // ACTION 5: High risk (71-100)→ record rejection on-chain (BFT attests refusal)
-    // ACTION 6: Medium risk (31-70)→ queue pending, Admin approves via approveMarket()
+    //
+    // Medium risk (31-70): CRE handles BFT consensus internally,
+    //                      if 21 nodes agree → still uses ACTION=1 to create market
     uint8 internal constant ACTION_CREATE_MARKET = 1;
     uint8 internal constant ACTION_REPORT_MANIPULATION = 2;
     uint8 internal constant ACTION_RESOLVE_MARKET = 3;
     uint8 internal constant ACTION_REJECT_MARKET = 5;
-    uint8 internal constant ACTION_QUEUE_PENDING = 6;
 
     // ============ Events ============
     event ReportReceived(uint8 indexed action, bytes32 workflowId);
@@ -54,8 +55,6 @@ abstract contract CREAdapter is
             _handleResolveMarket(report);
         } else if (action == ACTION_REJECT_MARKET) {
             _handleRejectMarket(report);
-        } else if (action == ACTION_QUEUE_PENDING) {
-            _handleQueuePendingMarket(report);
         } else {
             revert Errors.InvalidOutcome();
         }
@@ -118,60 +117,6 @@ abstract contract CREAdapter is
             priceFeedAddress,
             riskScore
         );
-    }
-
-    /// @dev ACTION_QUEUE_PENDING (Workflow 1 — medium risk 31-70)
-    ///      Queues market for Admin approval. targetValue & priceFeedAddress required for CRE-3 CryptoPrice resolution.
-    ///      Payload: (uint8 action, uint256 proposalId, address creator, uint64 deadline, uint16 feeBps,
-    ///               uint8 category, string question, string criteria, string sources,
-    ///               int256 targetValue, address priceFeedAddress, uint8 riskScore)
-    function _handleQueuePendingMarket(bytes calldata report) internal {
-        (
-            , // action
-            uint256 proposalId,
-            address creator,
-            uint64 deadline,
-            uint16 feeBps,
-            uint8 category,
-            string memory question,
-            string memory resolutionCriteria,
-            string memory dataSources,
-            int256 targetValue,
-            address priceFeedAddress,
-            uint8 riskScore
-        ) = abi.decode(
-                report,
-                (
-                    uint8,
-                    uint256,
-                    address,
-                    uint64,
-                    uint16,
-                    uint8,
-                    string,
-                    string,
-                    string,
-                    int256,
-                    address,
-                    uint8
-                )
-            );
-
-        uint256 pendingId = pendingCount++;
-        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
-        p.proposalId = proposalId;
-        p.creator = creator;
-        p.deadline = deadline;
-        p.feeBps = feeBps;
-        p.category = category;
-        p.question = question;
-        p.resolutionCriteria = resolutionCriteria;
-        p.dataSources = dataSources;
-        p.targetValue = targetValue;
-        p.priceFeedAddress = priceFeedAddress;
-        p.riskScore = riskScore;
-
-        emit Events.PendingMarketQueued(pendingId, proposalId, creator, riskScore);
     }
 
     /// @dev ACTION_REJECT_MARKET (Workflow 1 — high risk 71-100)
@@ -345,28 +290,5 @@ abstract contract CREAdapter is
     function unpauseMarket(uint256 marketId) external onlyAdmin {
         _requireMarketExists(marketId);
         _unpauseMarket(marketId);
-    }
-
-    /// @notice Admin approves a pending market (risk 31-70). Creates market with stored targetValue & priceFeedAddress for CRE-3 resolution.
-    function approveMarket(uint256 pendingId) external onlyAdmin returns (uint256 marketId) {
-        DataTypes.PendingMarket storage p = pendingMarkets[pendingId];
-        if (p.creator == address(0)) revert Errors.PendingMarketNotFound();
-
-        marketId = _createMarket(
-            p.proposalId,
-            p.creator,
-            p.deadline,
-            p.feeBps,
-            p.category,
-            p.question,
-            p.resolutionCriteria,
-            p.dataSources,
-            p.targetValue,
-            p.priceFeedAddress,
-            p.riskScore
-        );
-
-        // Mark as consumed to prevent double-approval
-        p.creator = address(0);
     }
 }
