@@ -18,6 +18,7 @@ library Errors {
     error MarketNotFound();
     error InvalidMarketId();
     error InvalidCategory();
+    error InvalidCryptoPriceData(); // CryptoPrice (category 0) requires targetValue and priceFeedAddress
     error VerityContractAlreadySet();
 
     // DEADLINE

@@ -29,6 +29,12 @@ abstract contract MarketFactory is VerityStorage {
         if (category > uint8(type(DataTypes.MarketCategory).max)) {
             revert Errors.InvalidCategory();
         }
+        // CryptoPrice (0) requires targetValue and priceFeedAddress for CRE-3 resolution
+        if (category == uint8(DataTypes.MarketCategory.CryptoPrice)) {
+            if (targetValue == 0 || priceFeedAddress == address(0)) {
+                revert Errors.InvalidCryptoPriceData();
+            }
+        }
         if (proposalId == NO_PROPOSAL) revert Errors.ProposalRequired();
 
         DataTypes.MarketProposal storage p = proposals[proposalId];
