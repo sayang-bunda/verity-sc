@@ -2,6 +2,14 @@
 
 Dokumen ini menjelaskan cara menghubungkan layanan **Oracle/Validator** ke kontrak cerdas **Verity**. Verity menggunakan `CREAdapter` (sebagai modul Oracle) untuk memungkinkan penyedia data mengelola siklus hidup pasar.
 
+## 0. Arsitektur: Keystone Forwarder
+
+**Production:** CRE DON → Chainlink Keystone Forwarder → `Verity.onReport` (msg.sender = Keystone)
+
+**Hackathon/Lokal:** User/CRE → MockKeystoneForwarder.forward(metadata, report) → `Verity.onReport` (msg.sender = MockKeystoneForwarder)
+
+Fungsi `onlyCre` memeriksa bahwa pemanggil memiliki `CRE_ROLE`. Di BaseScan, kolom "from" pada tx = Keystone Forwarder (bukan user). Untuk hackathon, deploy tanpa `CRE_ADDRESS` di .env agar `MockKeystoneForwarder` di-deploy; user trigger via `forward(metadata, report)`.
+
 ## 1. Peran dan Akses (Access Control)
 
 Untuk dapat berinteraksi dengan kontrak Verity, alamat dompet atau kontrak layanan Oracle harus memiliki peran `CRE_ROLE`.

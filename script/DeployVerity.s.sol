@@ -6,10 +6,14 @@ import {console2} from "forge-std/console2.sol";
 import {Verity} from "../src/Verity.sol";
 import {PositionToken} from "../src/tokens/PositionToken.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
+import {MockKeystoneForwarder} from "../src/mocks/MockKeystoneForwarder.sol";
 
 /**
  * @title DeployVerity
  * @notice Skrip untuk mendendeploy kontrak Verity dan PositionToken.
+ *
+ * CRE_ADDRESS: Jika tidak diset, deploy MockKeystoneForwarder (hackathon).
+ *               Jika diset, pakai alamat tersebut (production: Keystone Forwarder).
  *
  * Cara menjalankan:
  * forge script script/DeployVerity.s.sol --rpc-url <YOUR_RPC_URL> --broadcast --verify
@@ -20,7 +24,12 @@ contract DeployVerity is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address usdcAddress = vm.envAddress("USDC_ADDRESS");
         address adminAddress = vm.envAddress("ADMIN_ADDRESS");
-        address creAddress = vm.envAddress("CRE_ADDRESS");
+        address creAddress;
+        try vm.envAddress("CRE_ADDRESS") returns (address a) {
+            creAddress = a;
+        } catch {
+            creAddress = address(0);
+        }
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -40,20 +49,39 @@ contract DeployVerity is Script {
         PositionToken positionToken = new PositionToken();
         console2.log("PositionToken deployed at:", address(positionToken));
 
-        // 3. Deploy Verity Core
-        Verity verity = new Verity(usdc, address(positionToken), adminAddress, creAddress);
+        // 3. CRE address: pakai MockKeystoneForwarder jika CRE_ADDRESS tidak diset
+        bool useMockForwarder = (creAddress == address(0));
+        if (useMockForwarder) {
+            MockKeystoneForwarder forwarder = new MockKeystoneForwarder(address(0));
+            creAddress = address(forwarder);
+            console2.log("MockKeystoneForwarder deployed at:", creAddress);
+        }
+
+        // 4. Deploy Verity Core (CRE_ROLE = creAddress)
+        Verity verity = new Verity(
+            usdc,
+            address(positionToken),
+            adminAddress,
+            creAddress
+        );
         console2.log("Verity Core deployed at:", address(verity));
 
-        // 4. Link Verity ke PositionToken
+        // 5. Link Verity ke PositionToken
         positionToken.setVerityContract(address(verity));
         console2.log("Verity linked to PositionToken successfully");
+
+        // 6. Jika pakai MockKeystoneForwarder, set Verity address
+        if (useMockForwarder) {
+            MockKeystoneForwarder(creAddress).setVerity(address(verity));
+            console2.log("MockKeystoneForwarder linked to Verity");
+        }
 
         vm.stopBroadcast();
 
         console2.log("--- Deployment Summary ---");
         console2.log("Network (Chain ID):", block.chainid);
         console2.log("Verity Admin:", adminAddress);
-        console2.log("Oracle Service:", creAddress);
+        console2.log("CRE / Keystone Forwarder:", creAddress);
         console2.log("USDC Address:", usdc);
     }
 }
